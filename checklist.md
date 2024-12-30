@@ -14,5 +14,6 @@
 - [ ] Add professor list and indexing
 - [ ] (don't forget to create the intermediate "teaches" table)
 - [ ] scrape the main page for departments and format that
+- [ ] **run a bunch of none checks D:** (which i can kinda do after i run my code through multiple departments :D)
 - [ ] Add GE scraping as well
 - [ ] **Test every once in a while!**
