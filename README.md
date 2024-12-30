@@ -16,7 +16,7 @@ Full description of each feature:
 
 ## Course List (0.0.5)
 
-* The course list will be updated weekly, scraped using a python script from classes.usc.edu, and put through a SQL database to parse
+* The course list will be updated weekly, scraped using a python script from classes.usc.edu, and put through a SQL database (first SQLite, then MySQL or PostgreSQL) to parse
 * In case the course list is not available for that semester yet, the app will give an option to use the course list of previous semesters as a stopgap (and will then ask(? or overwrite directly) to change when the new schedule is out)
 * It will have all of the details of the course (save for the syllabus and extra info not directly available in WebReg)
 * To facilitate scheduling (and to solve the issue that students have when they're alerted of D-Clearance upon checkout), D-Clearance will be signaled with a different colour on the schedule, and a small alert that can be temporarily or permanently dismissed
@@ -64,5 +64,9 @@ Full description of each feature:
 * As said before, might be able to support dragging personal events on the map to allow for better route planning
 * Can add options for going through buildings or not (*will then need extensive campus research to see when and how buildings can be gone through*)
 * **might** add path planning using algorithms like Dijkstra's or A* Search
+
+## Chat Feature (?)
+
+## Add ratemyprof
 
 Then at the end of all of this means 1.0 release!
