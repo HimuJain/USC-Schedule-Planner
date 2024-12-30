@@ -14,7 +14,7 @@ Features planned:
 
 Full description of each feature:
 
-## Course List (0.0.5)
+## Course List (0.1.5)
 
 * The course list will be updated weekly, scraped using a python script from classes.usc.edu, and put through a SQL database (first SQLite, then MySQL or PostgreSQL) to parse
 * In case the course list is not available for that semester yet, the app will give an option to use the course list of previous semesters as a stopgap (and will then ask(? or overwrite directly) to change when the new schedule is out)
@@ -23,14 +23,14 @@ Full description of each feature:
 * Based on the amount of units the student has inputted as their maximum, the scheduler will have a small alert in case the student adds more units than they have
 * The course list inputted for previous years will remain on the account, to make it easier for requirements
 
-## Requirement List (0.1.0)
+## Requirement List (0.2.0)
 
 * The requirement list will include requirements for the student's major(s), minor(s), and general USC requirements (WRIT, GESM, GEs)
 * If a requirement exists but was fulfilled by a high school or other credit, there will be an option to select "already previously fulfilled" and it will be remembered in their account
 * When a course is added that fulfills a requirement, it will show in both the course list and the requirement list (which INCLUDES GEs, so no more guessing if a class you did earlier or a class you chose fullfills the wrong requirement or not)
 * Students will NOT be able to just import their STARS report, as that contains sensitive info
 
-## Account/Export file (0.2.0)
+## Account/Export file (0.3.0)
 
 * Simple login and password to store the info, or a json file that has all of their info (or both!)
 * If the login and password is implemented, then students **MUST NOT** use a username or password that is used in other accounts, as the login for these accounts will NOT be very well secured
