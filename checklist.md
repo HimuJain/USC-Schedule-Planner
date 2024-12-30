@@ -8,6 +8,7 @@
 - [x] Add prerequisite string formatting
 - [x] check how to insert null or deal with null (when importing to sql?)
 - [x] See how to format extra notes/warnings
+- [ ] **START COMMENTING CODE (IT'S GETTING INCOMPREHENSIBLE)**
 - [ ] fix regex code to include things like math 437a
 - [ ] Add section formatting
 - [ ] Add professor list and indexing

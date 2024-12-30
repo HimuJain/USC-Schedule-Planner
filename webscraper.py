@@ -97,7 +97,7 @@ for line in classes:
         crs_preqs.append(crs_preq)
 
     
-    crs_coreq = courseDetails.find('li', class_='corereq')
+    crs_coreq = courseDetails.find('li', class_='coreq')
     if crs_coreq is None:
         crs_coreqs.append("")
     else:
@@ -111,7 +111,27 @@ for line in classes:
     sections = sections.find('tbody')
     sections = sections.find_all('tr')
     sections = sections[1::]
+
+    sectionTitles = False
+    sct_num = ""
+    sct_title = ""
+
     for section in sections:
+        classType = str(section.get('class'))
+        if(sectionTitles or 'firstline' in classType):
+            sectionTitles = True
+            sct_title = section.find('td', class_='section-title').text
+            sct_num = sct_title
+            re.sub(re.compile('^[^0-9]+'), '', sct_num)
+            continue
+        elif(sectionTitles and 'secondline' in classType):
+            if(classType[:5] == sct_num):
+                sct_titles.append(sct_title)
+            else:
+                sct_titles.append("")
+        else:
+            sct_titles.append("")
+                
         # deal with titles
         sct_id = section.find('td', class_='section').text
         sct_ids.append(sct_id)
@@ -150,11 +170,9 @@ for line in classes:
             sct_rooms.append("")
 
         
-
-        sct_titles.append(section.find('td', class_='title').text)
         sct_crs_nums.append(crs_num)
         sct_crs_dep_ids.append(depID)
-        sct_units.append(section.find('td', class_='units').text)
+        print(section.find('td', class_='units').text)
 
         instructors = section.find('td', class_='instructor')
         instructors = instructors.find_all('a')
