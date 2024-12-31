@@ -2,9 +2,11 @@ import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
+import cProfile
+import concurrent.futures
 
 
-# ! fix the name errors for the schools
+urlSession = requests.Session()
 
 # class definitions
 
@@ -42,6 +44,7 @@ class Course:
         self.description = courseData['CRS_DESC']
         self.geaf = courseData['CRS_GEAF']
         self.gegh = courseData['CRS_GEGH']
+        self.dcorel = courseData['CRS_DCOREL']
         self.unitsStr = courseData['CRS_UNITSTR']
         self.units = courseData['CRS_UNITS']
         self.prerequisites = courseData['CRS_PREREQ']
@@ -57,6 +60,7 @@ class Course:
             'CRS_DESC': self.description,
             'CRS_GEAF': self.geaf,
             'CRS_GEGH': self.gegh,
+            'CRS_DCOREL': self.dcorel,
             'CRS_UNITSTR': self.unitsStr,
             'CRS_UNITS': self.units,
             'CRS_PREREQ': self.prerequisites,
@@ -76,6 +80,7 @@ class Section:
         self.room = sectionData['SCT_ROOM']
         self.title = sectionData['SCT_TITLE']
         self.units = sectionData['SCT_UNITS']
+        self.semester = sectionData['SCT_SEMESTER']
 
     def to_dict(self):
         return {
@@ -88,7 +93,25 @@ class Section:
             'SCT_BUILD': self.building,
             'SCT_ROOM': self.room,
             'SCT_TITLE': self.title,
-            'SCT_UNITS': self.units
+            'SCT_UNITS': self.units,
+            'SCT_SEMESTER': self.semester
+        }
+
+class Schedule:
+    def __init__(self, scheduleData):
+        self.sectionID = scheduleData['SCT_ID']
+        self.scheduleID = scheduleData['SCH_ID']
+        self.day = scheduleData['SCH_DAY']
+        self.start = scheduleData['SCH_STTIME']
+        self.end = scheduleData['SCH_ENTIME']
+
+    def to_dict(self):
+        return {
+            'SCT_ID': self.sectionID,
+            'SCH_ID': self.scheduleID,
+            'SCH_DAY': self.day,
+            'SCH_STTIME': self.start,
+            'SCH_ENTIME': self.end
         }
 
 class Instructor:
@@ -113,19 +136,70 @@ class Teaches:
             'SCT_ID': self.sectionID
         }
 
+# not used for now
+def fetchURL(url):
+    r = urlSession.get(url)
+    return BeautifulSoup(r.content, 'lxml')
+
+def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
+    print("reading general education")
+    geUrls = []
+    geResponses = []
+    geCategories = []
+    for ge in generalEducations:
+        geCode = str(ge.get('data-code'))
+        geTitle = str(ge.get('data-title'))
+        if("Seminar" in geTitle):
+            continue
+        elif("Core " in geTitle):
+            geCategory = "L"
+        else:
+            geTitle = geTitle.replace("Category ", "")
+            geCategory = geTitle[0]
+        geCategories.append(geCategory)
+        geUrls.append('https://classes.usc.edu/term-20251/classes/' + geCode + '/')
+    
+    for i in range(len(geUrls)):
+        r = urlSession.get(geUrls[i])
+        geResponses.append(r)
+
+    for i in range(len(geResponses)):
+        r = geResponses[i]
+        geCategory = geCategories[i]
+        soup = BeautifulSoup(r.content, 'lxml')
+        soup = soup.find('div', id='content-main')
+        soup.extract()
+        s = soup.find('div', class_='course-table')
+        classes = s.find_all('div', class_='course-info expandable')
+
+        for line in classes:
+            lineStr = str(line.get('id'))
+            lineStr = lineStr.replace("<div class=\"course-info expandable\" id=\"", "")
+            lineStr = lineStr.replace("\"></div>", "")
+            crs_id = lineStr.replace("-", "")
+
+            if(geCategory >= 'A' and geCategory <= 'F'):
+                geafDict[crs_id] = geCategory
+            elif(geCategory >= 'G' and geCategory <= 'H'):
+                geghDict[crs_id] = geCategory
+            elif(geCategory == 'L'):
+                dCoreSet.add(crs_id)
 
 
 
 def readSchoolsDepartments(departments, schoolList, departmentList):
+    print("reading schools and departments")
     schl_code = ''
     for department in departments:
         depType = str(department.get('data-type'))
         if("Requirements" in str(department.get('data-school'))):
-            # ! deal with GEs too
+            # already dealt with general education
             continue
         if(depType == 'school'):
             schl_code = str(department.get('data-code'))
             schl_name = department.text
+            schl_name.replace("\"", "")
+            schl_name = schl_name.strip()
             schoolObj = School({
                 'SCHL_CODE': schl_code,
                 'SCHL_NAME': schl_name
@@ -142,121 +216,214 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
             })
             departmentList.append(depObj)
 
-def readCourses(departmentList, courseList, sectionList, instructorList, instructorDict, teachingList):
+
+def readCourses(departmentSoups, departmentList, courseList, sectionList, instructorList, instructorDict, teachingList, scheduleList, geafDict, geghDict, dCoreSet, semester):
+    print("reading courses")
     for department in departmentList:
 
-        r = requests.get('https://classes.usc.edu/term-20251/classes/' + department.id + '/')
-        soup = BeautifulSoup(r.content, 'html.parser')
+        # r = departmentRequests[department.id]
+        # soup = BeautifulSoup(r.content, 'lxml')
+        soup = departmentSoups[department.id]
         soup = soup.find('div', id='content-main')
         soup.extract()
         s = soup.find('div', class_='course-table')
         classes = s.find_all('div', class_='course-info expandable')
-        # print(department.name)
+        print(department.name)
+
         for line in classes:
 
-                lineStr = str(line.get('id'))
-                lineStr = lineStr.replace("<div class=\"course-info expandable\" id=\"", "")
-                lineStr = lineStr.replace("\"></div>", "")
-
-                tempCode = lineStr
-                # ? necessary?
-
-                crs_num = lineStr.split('-')[1]
-
-                courseID = line.find('div', class_='course-id')
-                courseID = courseID.find('a')
-                crs_code = courseID.find('strong').text
-                crs_code = crs_code.replace(":", "")
-                crs_name = courseID.text
-                crs_name = (crs_name.split(':')[1]).split('(')[0].strip()
+            lineStr = str(line.get('id'))
+            lineStr = lineStr.replace("<div class=\"course-info expandable\" id=\"", "")
+            lineStr = lineStr.replace("\"></div>", "")
 
 
-                courseDetails = line.find('div', class_='course-details')
-                crs_desc = courseDetails.find('div', class_='catalogue').text
+            crs_num = lineStr.split('-')[1]
 
-                unitsEl = courseID.find('span', class_ = 'units')
-                unitsStr = (unitsEl.text)[1:-1:]
-                crs_unitstr = ""
-                crs_unit = ""
-                if('-' in unitsStr or 'max' in unitsStr):
-                    crs_unitstr = unitsStr
+            courseID = line.find('div', class_='course-id')
+            courseID = courseID.find('a')
+            crs_code = courseID.find('strong').text
+            crs_code = crs_code.replace(":", "")
+            crs_name = courseID.text
+            crs_name = (crs_name.split(':')[1]).split('(')[0].strip()
+
+
+            courseDetails = line.find('div', class_='course-details')
+            crs_desc = courseDetails.find('div', class_='catalogue').text
+
+            unitsEl = courseID.find('span', class_ = 'units')
+            unitsStr = (unitsEl.text)[1:-1:]
+            crs_unitstr = ""
+            crs_unit = ""
+            if('-' in unitsStr or 'max' in unitsStr):
+                crs_unitstr = unitsStr
+            else:
+                if(unitsStr.split('.')[0].isdigit()):
+                    crs_unit = int(unitsStr.split('.')[0])
                 else:
-                    if(unitsStr.split('.')[0].isdigit()):
-                        crs_unit = int(unitsStr.split('.')[0])
-                    else:
-                        crs_unit = "error"
+                    crs_unit = "error"
+                    print("error in units")
+            
+            crs_note = courseDetails.find('ul', class_='notes')
+            crs_preq = courseDetails.find('li', class_='prereq')
+            if crs_preq is None:
+                crs_preq = ""
+            else:
+                crs_preq = crs_preq.text
+                crs_preq = crs_preq.replace("1 from ", "")
+
+            
+            crs_coreq = courseDetails.find('li', class_='coreq')
+            if crs_coreq is None:
+                crs_coreq = ""
+            else:
+                crs_coreq = crs_coreq.text
+                crs_coreq = crs_coreq.replace("1 from ", "")
                 
-                crs_note = courseDetails.find('ul', class_='notes')
-                crs_preq = courseDetails.find('li', class_='prereq')
-                if crs_preq is None:
-                    crs_preqs = ""
-                else:
-                    crs_preq = crs_preq.text
-                    crs_preq = crs_preq.replace("1 from ", "")
+            crs_notes = crs_note
 
-                
-                crs_coreq = courseDetails.find('li', class_='coreq')
-                if crs_coreq is None:
-                    crs_coreq = ""
-                else:
-                    crs_coreq = crs_coreq.text
-                    crs_coreq = crs_coreq.replace("1 from ", "")
-                    
-                crs_notes = crs_note
+            crs_id = department.id + crs_num
+            crs_geaf = ""
+            crs_gegh = ""
+            crs_dcorel = False
+            if crs_id in geafDict:
+                crs_geaf = geafDict[crs_id]
+            if crs_id in geghDict:
+                crs_gegh = geghDict[crs_id]
+            if crs_id in dCoreSet:
+                crs_dcorel = True
 
-                courseObj = Course({
-                    'DEP_ID': department.id,
-                    'CRS_NUM': crs_num,
-                    'CRS_CODE': crs_code,
-                    'CRS_NAME': crs_name,
-                    'CRS_DESC': crs_desc,
-                    'CRS_GEAF': "",
-                    'CRS_GEGH': "",
-                    'CRS_UNITSTR': crs_unitstr,
-                    'CRS_UNITS': crs_unit,
-                    'CRS_PREREQ': crs_preq,
-                    'CRS_COREQ': crs_coreq,
-                    'CRS_NOTE': crs_notes
-                })
+            courseObj = Course({
+                'DEP_ID': department.id,
+                'CRS_NUM': crs_num,
+                'CRS_CODE': crs_code,
+                'CRS_NAME': crs_name,
+                'CRS_DESC': crs_desc,
+                'CRS_GEAF': crs_geaf,
+                'CRS_GEGH': crs_gegh,
+                'CRS_DCOREL': crs_dcorel,
+                'CRS_UNITSTR': crs_unitstr,
+                'CRS_UNITS': crs_unit,
+                'CRS_PREREQ': crs_preq,
+                'CRS_COREQ': crs_coreq,
+                'CRS_NOTE': crs_notes
+            })
 
-                courseList.append(courseObj)
+            courseList.append(courseObj)
 
-                sections = courseDetails.find('table', class_='sections responsive')
-                # print(sections.prettify())
-                sections = sections.find_all('tr')
-                sections = sections[1::]
+            sections = courseDetails.find('table', class_='sections responsive')
+            # print(sections.prettify())
+            sectionHTML = sections.find_all('tr')
+            sectionHTML = sectionHTML[1::]
 
-                readSections(sections, crs_num, department.id, sectionList, instructorList, instructorDict, teachingList)
+            readSections(sectionHTML, crs_num, department.id, sectionList, instructorList, instructorDict, teachingList, scheduleList, semester)
 
-def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, instructorDict, teachingList):
+            sections.extract()
+        
+            line.extract()
+
+def createSchedule(scheduleSoup, sct_id, scheduleList):
+    schedTime = scheduleSoup.find(class_ = 'time').extract()
+    schedTime = schedTime.text
+
+    schd_sttime = ""
+    schd_entime = ""
+
+    meridiem = schedTime[-2::]
+    schedTime = schedTime[:-2]
+    schedTime = schedTime.split('-')
+
+    if("pm" in meridiem):
+        for time in schedTime:
+            time = time.split(':')
+            if(time[0] != "12"):
+                time[0] = str(int(time[0]) + 12)
+            time = ':'.join(time)
+            if(schd_sttime == ""):
+                schd_sttime = time
+            else:
+                schd_entime = time
+    elif("am" in meridiem):
+        for time in schedTime:
+            time = time.split(':')
+            if(time[0] == "12"):
+                time[0] = "00"
+            time = ':'.join(time)
+            if(schd_sttime == ""):
+                schd_sttime = time
+            else:
+                schd_entime = time
+
+    schedDay = scheduleSoup.find(class_ = 'days').extract()
+    schedDay = schedDay.text
+
+    schd_day = []
+
+    if("TBA" in schedDay):
+        schd_day = [""]
+    elif(len(schedDay) == 3):
+        if("M" in schedDay):
+            schd_day.append("MON")
+        else:
+            print("error in day")
+        
+        if("W" in schedDay):
+            schd_day.append("WED")
+        else:
+            print("error in day")
+
+        if("F" in schedDay):
+            schd_day.append("FRI")
+        else:
+            print("error in day")
+    elif("," in schedDay):
+        schedDay = schedDay.split(', ')
+        for day in schedDay:
+            schd_day.append(day[:3].strip().upper())
+    else:
+        schd_day.append(schedDay[:3].upper())
+        
+    for day in schd_day:
+        scheduleObj = Schedule({
+            'SCT_ID': sct_id,
+            'SCH_ID': len(scheduleList) + 1,
+            'SCH_DAY': day,
+            'SCH_STTIME': schd_sttime,
+            'SCH_ENTIME': schd_entime
+        })
+        scheduleList.append(scheduleObj)
+
+
+        
+
+def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, instructorDict, teachingList, scheduleList, semester):
     sectionTitles = False
     sct_num = ""
     sct_title = ""
 
-    for section in sectionSoup:
-        classType = str(section.find('td').get('class'))
+    
+    for sectionHTML in sectionSoup:
+        classType = str(sectionHTML.find('td').get('class'))
         if(classType == "[\'section-title\']"):
             sectionTitles = True
-            sct_title = section.find('td', class_='section-title').text
-            sct_num = sct_title
-            re.sub(re.compile('^[^0-9]+'), '', sct_num)
+            sct_title = sectionHTML.find('td', class_='section-title').text
+            sct_num = sectionHTML.get('class')[-1]
             continue
         elif(sectionTitles and classType == "[\'section\']"):
-            if(classType[:5] != sct_num):
+            if(sectionHTML.get('data-section-id') != sct_num):
                 sct_title = ""
             sectionTitles = False
-        elif("secondline" in str(section.get('class'))):
-            # ! handle second line (additionall timing, see bisc 544)
+        elif("secondline" in str(sectionHTML.get('class'))):
+            createSchedule(sectionHTML, sct_num, scheduleList)
             continue
         else:
-            sct_titles = ""
-        
-        sct_id = section.find('td', class_='section').text
+            sct_title = ""
 
-        sct_type = section.find('td', class_='type').text
-        
-        sct_enr = section.find('td', class_='registered').text
+        sct_num = sectionHTML.get('class')[0]
+        sct_id = sectionHTML.find('td', class_='section').text
 
+        sct_type = sectionHTML.find('td', class_='type').text
+        
+        sct_enr = sectionHTML.find('td', class_='registered').text
         sct_enr = sct_enr.split(' of ')
         sct_reg = 0
         sct_seat = 0
@@ -277,7 +444,7 @@ def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, inst
             sct_seat = 0
 
 
-        sct_loc = section.find('td', class_='location')
+        sct_loc = sectionHTML.find('td', class_='location')
         sct_build = ""
         sct_room = ""
         if(sct_loc.find('a') is None):
@@ -285,23 +452,17 @@ def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, inst
             sct_room = ""
         else:
             sct_build = sct_loc.find('a').text
-
-            if(not sct_build.isalpha()):
-                sct_build = ""
-            
             sct_room = (sct_loc.text).replace(sct_build, "")
-            if(not sct_room.isdigit()):
-                sct_room = ""
 
         sct_unit = ""
-        if(not (section.find('td', class_='units') is None)):
-            sct_unit = section.find('td', class_='units').text
+        if(not (sectionHTML.find('td', class_='units') is None)):
+            sct_unit = sectionHTML.find('td', class_='units').text
             sct_unit = sct_unit.split('.')[0]
             if(sct_unit.isdigit()):
                 sct_unit = int(sct_unit)
             else:
                 sct_unit = ""
-        
+        createSchedule(sectionHTML, sct_num, scheduleList)
         sectionObj = Section({
             'DEP_ID': dep_id,
             'CRS_NUM': crs_num,
@@ -312,14 +473,17 @@ def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, inst
             'SCT_BUILD': sct_build,
             'SCT_ROOM': sct_room,
             'SCT_TITLE': sct_title,
-            'SCT_UNITS': sct_unit
+            'SCT_UNITS': sct_unit,
+            'SCT_SEMESTER': semester
         })
 
         sectionList.append(sectionObj)
-
-        instructors = section.find('td', class_='instructor')
+        instructors = sectionHTML.find('td', class_='instructor')
         if instructors is not None and instructors.text != "":
             readInstructors(instructors, sct_id, instructorList, instructorDict, teachingList)
+        instructors.extract()
+        
+        sectionHTML.extract()
 
 def readInstructors(instructorSoup, sct_id, instructorList, instructorDict, teachingList):
     instructors = instructorSoup.text
@@ -344,6 +508,9 @@ def readInstructors(instructorSoup, sct_id, instructorList, instructorDict, teac
             'SCT_ID': sct_id
         })
         teachingList.append(teachObj)
+    
+    instructorSoup.extract()
+
 
 
 
@@ -356,17 +523,73 @@ def main():
     sectionList = []
     instructorList = []
     teachingList = []
+    scheduleList = []
 
-    semester = "20251"
+    #     import logging
 
-    r = requests.get('https://classes.usc.edu/term-' + semester + '/')
-    soup = BeautifulSoup(r.content, 'html.parser')
+    # # These two lines enable debugging at httplib level (requests->urllib3->http.client)
+    # # You will see the REQUEST, including HEADERS and DATA, and RESPONSE with HEADERS but without DATA.
+    # # The only thing missing will be the response.body which is not logged.
+    #     try:
+    #         import http.client as http_client
+    #     except ImportError:
+    #         # Python 2
+    #         import http.client as http_client
+    #     http_client.HTTPConnection.debuglevel = 1
+
+    #     # You must initialize logging, otherwise you'll not see debug output.
+    #     logging.basicConfig()
+    #     logging.getLogger().setLevel(logging.DEBUG)
+    #     requests_log = logging.getLogger("requests.packages.urllib3")
+    #     requests_log.setLevel(logging.DEBUG)
+    #     requests_log.propagate = True
+
+    semester = 20231
+
+    r = urlSession.get('https://classes.usc.edu/term-' + str(semester) + '/')
+    soup = BeautifulSoup(r.content, 'lxml')
     departments = soup.find('ul', id='sortable-classes')
     departments.extract()
+    generalEducation = departments.find_all('li', {"data-school":"GE Requirements for Students Beginning College in Fall 2015 or Later"})
+
+    geafDict = {}
+    geghDict = {}
+    dCoreSet = set()
+    readGeneralEducation(generalEducation, geafDict, geghDict, dCoreSet)
     departments = departments.find_all('li')
     readSchoolsDepartments(departments, schoolList, departmentList)
     instructorDict = {}
-    readCourses(departmentList, courseList, sectionList, instructorList, instructorDict, teachingList)
+
+    # depUrlList = []
+    # departmentRequests = {}
+    # print("requesting departments")
+    # for department in departmentList:
+    #     print(department.name)
+    #     departmentRequests[department.id] = urlSession.get('https://classes.usc.edu/term-' + str(semester) + '/classes/' + department.id + '/')
+    # print("finished requesting departments")
+
+
+    # readCourses(departmentRequests, departmentList, courseList, sectionList, instructorList, instructorDict, teachingList, scheduleList, geafDict, geghDict, dCoreSet, semester)
+
+
+
+    depUrlList = []
+    for department in departmentList:
+        depUrlList.append('https://classes.usc.edu/term-' + str(semester) + '/classes/' + department.id + '/')
+
+    print("future stuff")
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        results = executor.map(fetchURL, depUrlList)
+    print("after future stuff")
+
+    departmentSoups = {}
+
+    for soup in results:
+        depID = soup.find('abbr').text
+        departmentSoups[depID] = soup
+
+    
+    readCourses(departmentSoups, departmentList, courseList, sectionList, instructorList, instructorDict, teachingList, scheduleList, geafDict, geghDict, dCoreSet, semester)
 
     print("before export")
     pd.DataFrame([school.to_dict() for school in schoolList]).to_csv('schools.csv', index=False)
@@ -375,6 +598,7 @@ def main():
     pd.DataFrame([section.to_dict() for section in sectionList]).to_csv('sections.csv', index=False)
     pd.DataFrame([instructor.to_dict() for instructor in instructorList]).to_csv('instructors.csv', index=False)
     pd.DataFrame([teaching.to_dict() for teaching in teachingList]).to_csv('teaches.csv', index=False)
+    pd.DataFrame([schedule.to_dict() for schedule in scheduleList]).to_csv('schedules.csv', index=False)
     print("after export")
 
 if __name__ == '__main__':
