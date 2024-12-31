@@ -13,9 +13,10 @@
 - [x] see how to handle date and time for each section (also dealind with firstline and secondline)
 - [x] see how to handle semester and year for each section
 - [x] Figure out how to add sections to an existing course if this is the case?
-- [ ] not all building's rooms are only numbers (see chem 115 from 2023 fall), so fix
+- [x] not all building's rooms are only numbers (see chem 115 from 2023 fall), so fix
 - [ ] see how to handle notes (please!)
 - [ ] **START COMMENTING CODE (IT'S GETTING INCOMPREHENSIBLE)**
+- [ ] use the csv files to find the max characters for all the fields for the eer diagram
 - [x] ~~fix regex code to include things like math 437a (not for the webscraper portion actually so whatever~~)
 - [x] Add section formatting
 - [x] Add professor list and indexing

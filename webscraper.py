@@ -5,11 +5,12 @@ import re
 import cProfile
 import concurrent.futures
 
-
+# the url session is a global variable because i need it to be used in the fetchURL function by default,
+# and i can't pass it as an argument to the fetchURL function because it is called by the ThreadPoolExecutor
 urlSession = requests.Session()
 
-# class definitions
 
+# class definitions based on the sql database schema
 class School:
     def __init__(self, schoolData):
         self.code = schoolData['SCHL_CODE']
@@ -136,11 +137,14 @@ class Teaches:
             'SCT_ID': self.sectionID
         }
 
-# not used for now
+# Parameters: url
+# Returns: BeautifulSoup object
+# Description: fetches the html content of the url and returns a BeautifulSoup object
 def fetchURL(url):
     r = urlSession.get(url)
     return BeautifulSoup(r.content, 'lxml')
 
+# Parameters: generalEducations, geafDict, geghDict, dCoreSet
 def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
     print("reading general education")
     geUrls = []
@@ -192,13 +196,12 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
     schl_code = ''
     for department in departments:
         depType = str(department.get('data-type'))
-        if("Requirements" in str(department.get('data-school'))):
+        if("Requirements" in str(department.get('data-school')) and "Seminar" not in str(department.get('data-title'))):
             # already dealt with general education
             continue
         if(depType == 'school'):
             schl_code = str(department.get('data-code'))
             schl_name = department.text
-            schl_name.replace("\"", "")
             schl_name = schl_name.strip()
             schoolObj = School({
                 'SCHL_CODE': schl_code,
@@ -217,7 +220,7 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
             departmentList.append(depObj)
 
 
-def readCourses(departmentSoups, departmentList, courseList, sectionList, instructorList, instructorDict, teachingList, scheduleList, geafDict, geghDict, dCoreSet, semester):
+def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet):
     print("reading courses")
     for department in departmentList:
 
@@ -228,7 +231,7 @@ def readCourses(departmentSoups, departmentList, courseList, sectionList, instru
         soup.extract()
         s = soup.find('div', class_='course-table')
         classes = s.find_all('div', class_='course-info expandable')
-        print(department.name)
+        # print(department.name)
 
         for line in classes:
 
@@ -294,7 +297,7 @@ def readCourses(departmentSoups, departmentList, courseList, sectionList, instru
 
             courseObj = Course({
                 'DEP_ID': department.id,
-                'CRS_NUM': crs_num,
+                'CRS_NUM': str(crs_num),
                 'CRS_CODE': crs_code,
                 'CRS_NAME': crs_name,
                 'CRS_DESC': crs_desc,
@@ -315,13 +318,18 @@ def readCourses(departmentSoups, departmentList, courseList, sectionList, instru
             sectionHTML = sections.find_all('tr')
             sectionHTML = sectionHTML[1::]
 
-            readSections(sectionHTML, crs_num, department.id, sectionList, instructorList, instructorDict, teachingList, scheduleList, semester)
-
-            sections.extract()
+            counter = 0
+            for section in sectionHTML:
+                sectionSoupDict[department.id + " " + crs_num + " " + str(counter)] = section
+                counter += 1
+        
         
             line.extract()
 
-def createSchedule(scheduleSoup, sct_id, scheduleList):
+def createSchedule(scheduleSoup, sct_id, scheduleList, scheduledSet):
+    if(sct_id in scheduledSet):
+        return
+
     schedTime = scheduleSoup.find(class_ = 'time').extract()
     schedTime = schedTime.text
 
@@ -358,27 +366,37 @@ def createSchedule(scheduleSoup, sct_id, scheduleList):
 
     schd_day = []
 
+    capCount = 0
+
+    for i in schedDay:
+        if(i.isupper()):
+            capCount += 1
+
     if("TBA" in schedDay):
         schd_day = [""]
-    elif(len(schedDay) == 3):
-        if("M" in schedDay):
-            schd_day.append("MON")
-        else:
-            print("error in day")
-        
-        if("W" in schedDay):
-            schd_day.append("WED")
-        else:
-            print("error in day")
-
-        if("F" in schedDay):
-            schd_day.append("FRI")
-        else:
-            print("error in day")
     elif("," in schedDay):
         schedDay = schedDay.split(', ')
         for day in schedDay:
             schd_day.append(day[:3].strip().upper())
+    elif(capCount > 1):
+        if("M" in schedDay):
+            schd_day.append("MON")
+        
+        if("Tu" in schedDay):
+            schd_day.append("TUE")
+        
+        if("W" in schedDay):
+            schd_day.append("WED")
+        
+        if("Th" in schedDay):
+            schd_day.append("THU")
+
+        if("F" in schedDay):
+            schd_day.append("FRI")
+
+        if(len(schd_day) == 0):
+            print("error in day")
+            print(schedDay)
     else:
         schd_day.append(schedDay[:3].upper())
         
@@ -391,17 +409,23 @@ def createSchedule(scheduleSoup, sct_id, scheduleList):
             'SCH_ENTIME': schd_entime
         })
         scheduleList.append(scheduleObj)
+    
+
+    scheduledSet.add(sct_id)
+    
+    
 
 
         
 
-def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, instructorDict, teachingList, scheduleList, semester):
+def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList, scheduledSet, semester):
     sectionTitles = False
     sct_num = ""
     sct_title = ""
+    sct_id = ""
 
     
-    for sectionHTML in sectionSoup:
+    for secID, sectionHTML in sectionSoupDict.items():
         classType = str(sectionHTML.find('td').get('class'))
         if(classType == "[\'section-title\']"):
             sectionTitles = True
@@ -413,7 +437,7 @@ def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, inst
                 sct_title = ""
             sectionTitles = False
         elif("secondline" in str(sectionHTML.get('class'))):
-            createSchedule(sectionHTML, sct_num, scheduleList)
+            createSchedule(sectionHTML, sct_id, scheduleList, scheduledSet)
             continue
         else:
             sct_title = ""
@@ -462,16 +486,21 @@ def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, inst
                 sct_unit = int(sct_unit)
             else:
                 sct_unit = ""
-        createSchedule(sectionHTML, sct_num, scheduleList)
+            
+        secID = secID.split(' ')
+        dep_id = secID[0]
+        crs_num = secID[1]
+
+        createSchedule(sectionHTML, sct_id, scheduleList, scheduledSet)
         sectionObj = Section({
             'DEP_ID': dep_id,
-            'CRS_NUM': crs_num,
+            'CRS_NUM': str(crs_num),
             'SCT_ID': sct_id,
             'SCT_TYPE': sct_type,
             'SCT_REG': sct_reg,
             'SCT_SEATS': sct_seat,
             'SCT_BUILD': sct_build,
-            'SCT_ROOM': sct_room,
+            'SCT_ROOM': str(sct_room),
             'SCT_TITLE': sct_title,
             'SCT_UNITS': sct_unit,
             'SCT_SEMESTER': semester
@@ -480,15 +509,21 @@ def readSections(sectionSoup, crs_num, dep_id, sectionList, instructorList, inst
         sectionList.append(sectionObj)
         instructors = sectionHTML.find('td', class_='instructor')
         if instructors is not None and instructors.text != "":
-            readInstructors(instructors, sct_id, instructorList, instructorDict, teachingList)
+
+            instructorText = instructors.text
+            instructorText = instructorText.split(',')
+            for instructor in instructorText:
+                instructorListDict[sct_id] = instructor
+
         instructors.extract()
         
         sectionHTML.extract()
 
-def readInstructors(instructorSoup, sct_id, instructorList, instructorDict, teachingList):
-    instructors = instructorSoup.text
-    instructors = instructors.split(',')
-    for instructor in instructors:
+def readInstructors(instructorListDict, instructorList, teachingList):
+
+    instructorDict = {}
+
+    for sct_id, instructor in instructorListDict.items():
         instr_name = instructor.strip()
         # instructor lookup table appending
         instr_id = 0
@@ -508,8 +543,7 @@ def readInstructors(instructorSoup, sct_id, instructorList, instructorDict, teac
             'SCT_ID': sct_id
         })
         teachingList.append(teachObj)
-    
-    instructorSoup.extract()
+
 
 
 
@@ -556,9 +590,11 @@ def main():
     geghDict = {}
     dCoreSet = set()
     readGeneralEducation(generalEducation, geafDict, geghDict, dCoreSet)
+
     departments = departments.find_all('li')
     readSchoolsDepartments(departments, schoolList, departmentList)
-    instructorDict = {}
+
+
 
     # depUrlList = []
     # departmentRequests = {}
@@ -588,8 +624,16 @@ def main():
         depID = soup.find('abbr').text
         departmentSoups[depID] = soup
 
-    
-    readCourses(departmentSoups, departmentList, courseList, sectionList, instructorList, instructorDict, teachingList, scheduleList, geafDict, geghDict, dCoreSet, semester)
+    sectionSoupDict = {}
+    readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet)
+
+    instructorListDict = {}
+
+    scheduledSet = set()
+
+    readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList, scheduledSet, semester)
+
+    readInstructors(instructorListDict, instructorList, teachingList)
 
     print("before export")
     pd.DataFrame([school.to_dict() for school in schoolList]).to_csv('schools.csv', index=False)
