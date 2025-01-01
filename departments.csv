@@ -7,6 +7,7 @@ DRNS,ARAB,Arabic
 DRNS,AHIS,Art History
 DRNS,ASTR,Astronomy
 DRNS,BISC,Biological Sciences
+DRNS,CGSC,Cognitive Science
 DRNS,CHEM,Chemistry
 DRNS,CLAS,Classics
 DRNS,COLT,Comparative Literature
@@ -48,15 +49,17 @@ DRNS,POIR,Political Science and International Relations
 DRNS,PORT,Portuguese
 DRNS,POSC,Political Science
 DRNS,PSYC,Psychology
-DRNS,QBIO,Quantitative Biology
+DRNS,QBIO,Quantitative and Computational Biology
 DRNS,REL,Religion
 DRNS,RNR,Registrar's Office
 DRNS,RUSS,Russian
 DRNS,SLL,Slavic Languages and Literatures
+DRNS,SMGT,Sustainability Management
 DRNS,SOCI,Sociology
 DRNS,SPAN,Spanish
 DRNS,SSCI,Spatial Sciences
 DRNS,USC,University of Southern California
+DRNS,VISS,Visual Studies
 DRNS,WRIT,Writing
 ACTN,ACCT,Accounting
 ARCH,ARCH,Architecture
@@ -93,6 +96,7 @@ ANSC,DMM,Digital Media Management
 ANSC,DSM,Digital Social Media
 ANSC,JOUR,Journalism
 ANSC,PR,Public Relations
+ANSC,PRSM,"Public Relations Innovation, Strategy and Management"
 ANSC,PUBD,Public Diplomacy
 DNCR,DANC,Dance
 DNTR,ADNT,Advanced Dental Education Conjoint Program
@@ -123,6 +127,7 @@ ENGV,CE,Civil Engineering
 ENGV,CSCI,Computer Science
 ENGV,DSCI,Data Science
 ENGV,EE,Electrical and Computer Engineering
+ENGV,EIS,Engineering in Society
 ENGV,ENE,Environmental Engineering
 ENGV,ENGR,Engineering
 ENGV,ISE,Industrial and Systems Engineering
@@ -133,6 +138,7 @@ ENGV,SAE,Systems Architecting and Engineering
 FINE,ART,Art
 FINE,CRIT,Critical Studies
 FINE,DES,Design
+FINE,FDN,Fashion Design
 FINE,GESM,General Education Seminar
 GERD,GERO,Gerontology
 GRSC,GRSC,Graduate Studies
@@ -153,6 +159,7 @@ MEDK,MEDB,Medical Biology
 MEDK,MEDS,Medical Sciences
 MEDK,MICB,Molecular Microbiology and Immunology
 MEDK,MPHY,Medical Physiology
+MEDK,NEUM,Neuromedicine
 MEDK,NIIN,Neuroimaging and Informatics
 MEDK,OHNS,Otolaryngology - Head and Neck Surgery
 MEDK,PAIN,Pain Medicine
@@ -208,3 +215,4 @@ PPDP,PLUS,Urban and Regional Planning
 PPDP,RED,Real Estate Development
 SWDP,SWKC,On Campus and Hybrid courses
 SWDP,SWKO,Virtual Academic Center
+SWDP,PDF,Postdoctoral Fellows

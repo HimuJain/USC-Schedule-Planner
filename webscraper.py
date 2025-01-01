@@ -11,6 +11,8 @@ urlSession = requests.Session()
 
 
 # class definitions based on the sql database schema
+
+# School class stores the different schools (school of engineering, school of business, etc.)
 class School:
     def __init__(self, schoolData):
         self.code = schoolData['SCHL_CODE']
@@ -22,7 +24,7 @@ class School:
             'SCHL_NAME': self.name
         }
     
-
+# Department class stores the different course departments (computer science, electrical engineering, etc.)
 class Department:
     def __init__(self, departmentData):
         self.schoolCode = departmentData['SCHL_CODE']
@@ -36,6 +38,7 @@ class Department:
             'DEP_NAME': self.name
         }
 
+# Course class stores the different courses (CSCI 104, EE 109, etc.) and their details (GE requirements, units)
 class Course:
     def __init__(self, courseData):
         self.departmentID = courseData['DEP_ID']
@@ -50,6 +53,7 @@ class Course:
         self.units = courseData['CRS_UNITS']
         self.prerequisites = courseData['CRS_PREREQ']
         self.corequisites = courseData['CRS_COREQ']
+        self.crosslist = courseData['CRS_CROSS']
         self.notes = courseData['CRS_NOTE']
 
     def to_dict(self):
@@ -66,9 +70,11 @@ class Course:
             'CRS_UNITS': self.units,
             'CRS_PREREQ': self.prerequisites,
             'CRS_COREQ': self.corequisites,
+            'CRS_CROSS': self.crosslist,
             'CRS_NOTE': self.notes
         }
     
+# Section class stores the different sections of a course (the lecture sections, the lab, etc. with their IDs)
 class Section:
     def __init__(self, sectionData):
         self.courseDepID = sectionData['DEP_ID']
@@ -98,6 +104,7 @@ class Section:
             'SCT_SEMESTER': self.semester
         }
 
+# Schedule class stores all the different schedules of a section (one row for each different day and time)
 class Schedule:
     def __init__(self, scheduleData):
         self.sectionID = scheduleData['SCT_ID']
@@ -114,7 +121,7 @@ class Schedule:
             'SCH_STTIME': self.start,
             'SCH_ENTIME': self.end
         }
-
+# Instructor class stores the different instructors and their IDs
 class Instructor:
     def __init__(self, instructorData):
         self.id = instructorData['INSTR_ID']
@@ -126,6 +133,7 @@ class Instructor:
             'INSTR_NAME': self.name
         }
 
+# Teaches class stores the different instructors and the sections they teach by ID (multiple different instructors can teach the same section)
 class Teaches:
     def __init__(self, teachingData):
         self.instructorID = teachingData['INSTR_ID']
@@ -145,16 +153,28 @@ def fetchURL(url):
     return BeautifulSoup(r.content, 'lxml')
 
 # Parameters: generalEducations, geafDict, geghDict, dCoreSet
+# Returns: None
+# Description: reads the general education requirements and stores them in the appropriate dictionaries to assign them later
 def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
     print("reading general education")
+
+    # list of urls to batch process them
     geUrls = []
+    # the responses from the batch processing
     geResponses = []
+    # the categories of the general education requirements, ordered by the order they appear in the html
     geCategories = []
+
+    # loops through the different html sections, and gets their details
     for ge in generalEducations:
+        # the code that's used in the url for the general education requirement
         geCode = str(ge.get('data-code'))
+        # the title of the requirement (Category A, Category B, etc.)
         geTitle = str(ge.get('data-title'))
+        # don't want to go through all the seminars
         if("Seminar" in geTitle):
             continue
+        # core is not a ge, but a dornsife thing, so still keep it
         elif("Core " in geTitle):
             geCategory = "L"
         else:
@@ -163,25 +183,31 @@ def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
         geCategories.append(geCategory)
         geUrls.append('https://classes.usc.edu/term-20251/classes/' + geCode + '/')
     
+    # batch processing the urls
     for i in range(len(geUrls)):
-        r = urlSession.get(geUrls[i])
-        geResponses.append(r)
+        geResponses.append(urlSession.get(geUrls[i]))
 
     for i in range(len(geResponses)):
+        # goes through each category
         r = geResponses[i]
         geCategory = geCategories[i]
         soup = BeautifulSoup(r.content, 'lxml')
         soup = soup.find('div', id='content-main')
         soup.extract()
         s = soup.find('div', class_='course-table')
+
+        # gets all the classes in that page
         classes = s.find_all('div', class_='course-info expandable')
 
+        # goes through each class and stores the class id with its ge in the dictionaries
         for line in classes:
             lineStr = str(line.get('id'))
             lineStr = lineStr.replace("<div class=\"course-info expandable\" id=\"", "")
             lineStr = lineStr.replace("\"></div>", "")
             crs_id = lineStr.replace("-", "")
 
+            # classes can have one ge from a-f, one ge from g or h, and can be a dornsife core class
+            # so record the relevant ge being parsed right now and put the relevant course in the relevant dictionary
             if(geCategory >= 'A' and geCategory <= 'F'):
                 geafDict[crs_id] = geCategory
             elif(geCategory >= 'G' and geCategory <= 'H'):
@@ -190,16 +216,24 @@ def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
                 dCoreSet.add(crs_id)
 
 
-
+# Parameters: departments, schoolList, departmentList
+# Returns: None
+# Description: reads the schools and departments, creates School and Department objects and appends them to the appropriate lists
 def readSchoolsDepartments(departments, schoolList, departmentList):
+    # reads the schools and departments
     print("reading schools and departments")
+
+    # store the schl code outside of the loop so it stays static for all subsequent departments
+    # until a new school comes along
     schl_code = ''
     for department in departments:
         depType = str(department.get('data-type'))
+        # skip if it's gen end, but NOT a seminar (it's a unique category and doesn't overlap any actual departments, so we still have to populate the tablle)
         if("Requirements" in str(department.get('data-school')) and "Seminar" not in str(department.get('data-title'))):
             # already dealt with general education
             continue
         if(depType == 'school'):
+            # if it's a school, create the object and update the school code
             schl_code = str(department.get('data-code'))
             schl_name = department.text
             schl_name = schl_name.strip()
@@ -209,6 +243,7 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
             })
             schoolList.append(schoolObj)
         elif(depType == 'department'):
+            # if it's a department, create the object and append it to the list
             dep_id = str(department.get('data-code'))
             dep_name = str(department.get('data-title'))
 
@@ -219,40 +254,46 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
             })
             departmentList.append(depObj)
 
-
+# Parameters: departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet
+# Returns: None
+# Description: reads the courses and creates Course objects and the section Soup objects and appends them to the appropriate lists
 def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet):
     print("reading courses")
+    # first get the specific department soup from the dictionary
     for department in departmentList:
-
-        # r = departmentRequests[department.id]
-        # soup = BeautifulSoup(r.content, 'lxml')
         soup = departmentSoups[department.id]
         soup = soup.find('div', id='content-main')
         soup.extract()
         s = soup.find('div', class_='course-table')
         classes = s.find_all('div', class_='course-info expandable')
-        # print(department.name)
+
+        # filter it for the classes and iterate through them
 
         for line in classes:
-
             lineStr = str(line.get('id'))
             lineStr = lineStr.replace("<div class=\"course-info expandable\" id=\"", "")
             lineStr = lineStr.replace("\"></div>", "")
 
-
+            # get the course number by splitting the course id by the dash
             crs_num = lineStr.split('-')[1]
 
+            # this is to get the course display code (sometimes it's got extra letters from the display number)
             courseID = line.find('div', class_='course-id')
             courseID = courseID.find('a')
             crs_code = courseID.find('strong').text
             crs_code = crs_code.replace(":", "")
+
+            # get the course title
             crs_name = courseID.text
             crs_name = (crs_name.split(':')[1]).split('(')[0].strip()
 
-
+            # get the descriptio of the course
             courseDetails = line.find('div', class_='course-details')
             crs_desc = courseDetails.find('div', class_='catalogue').text
 
+            # sometimes the course can have different units based on the section
+            # so record the unit number if it's got only one possible set of units
+            # or just record the variety of units if it's got multiple
             unitsEl = courseID.find('span', class_ = 'units')
             unitsStr = (unitsEl.text)[1:-1:]
             crs_unitstr = ""
@@ -266,7 +307,21 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                     crs_unit = "error"
                     print("error in units")
             
+            # get the notes of the course (straight html for now)
             crs_note = courseDetails.find('ul', class_='notes')
+
+            # if the course is crosslisted, get the department that offers the course
+            crs_cross = crs_note.find('li', class_='crosslist')
+            if (crs_cross is None):
+                crs_cross = ""
+            else:
+                crs_cross = crs_cross.find_all('a')
+                crs_cross = crs_cross[2].text
+                crs_cross = crs_cross.replace(" ", "-")
+
+            # get the prerequisites and corequisites of the course
+            # (include only brackets, ANDs and ORs so that with further logic, the course numbers
+            # can just be replaced with "TRUE" if taken and "FALSE" if not, to see if you fulfill the prereqs/coreqs for the course)
             crs_preq = courseDetails.find('li', class_='prereq')
             if crs_preq is None:
                 crs_preq = ""
@@ -282,8 +337,8 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 crs_coreq = crs_coreq.text
                 crs_coreq = crs_coreq.replace("1 from ", "")
                 
-            crs_notes = crs_note
-
+            # get the course id recorded in the dictionary for gen eds
+            # and get update the relevant fields if it is a gen ed
             crs_id = department.id + crs_num
             crs_geaf = ""
             crs_gegh = ""
@@ -308,38 +363,51 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 'CRS_UNITS': crs_unit,
                 'CRS_PREREQ': crs_preq,
                 'CRS_COREQ': crs_coreq,
-                'CRS_NOTE': crs_notes
+                'CRS_CROSS': crs_cross,
+                'CRS_NOTE': crs_note
             })
 
             courseList.append(courseObj)
 
+            # get the sections from the course soup
             sections = courseDetails.find('table', class_='sections responsive')
-            # print(sections.prettify())
             sectionHTML = sections.find_all('tr')
             sectionHTML = sectionHTML[1::]
 
+            # add them to a dictionary
+            # order them by course id, but also add a counter to make sure they're unique
+            # as one course can have multiple sections, but we need all the different sections
             counter = 0
             for section in sectionHTML:
                 sectionSoupDict[department.id + " " + crs_num + " " + str(counter)] = section
                 counter += 1
         
-        
+            # extract the course details to remove them from the soup
             line.extract()
 
+# Parameters: scheduleSoup, sct_id, scheduleList, scheduledSet
+# Returns: None
+# Description: uses the section Soup objects to create Schedule objects and appends them to the scheduleList
 def createSchedule(scheduleSoup, sct_id, scheduleList, scheduledSet):
+    
+    # if the section has already been scheduled, don't create a new entry
+    # (this specifically happens when courses are crosslisted; the same section is in multiple courses)
     if(sct_id in scheduledSet):
         return
-
+    
+    # get the listed time
     schedTime = scheduleSoup.find(class_ = 'time').extract()
     schedTime = schedTime.text
 
     schd_sttime = ""
     schd_entime = ""
 
+    # get am vs pm, and split the time into start and end times
     meridiem = schedTime[-2::]
     schedTime = schedTime[:-2]
     schedTime = schedTime.split('-')
 
+    # deal with am and pm accordingly (to turn into 24 hour time)
     if("pm" in meridiem):
         for time in schedTime:
             time = time.split(':')
@@ -361,23 +429,29 @@ def createSchedule(scheduleSoup, sct_id, scheduleList, scheduledSet):
             else:
                 schd_entime = time
 
+    # get the days the section is scheduled
     schedDay = scheduleSoup.find(class_ = 'days').extract()
     schedDay = schedDay.text
 
     schd_day = []
 
+    # counter for the number of capital letters in the string (for strings like "MWF" or "MWThF",
+    # and also lets you know there's only one day for strings like "Friday")
     capCount = 0
 
     for i in schedDay:
         if(i.isupper()):
             capCount += 1
 
+    # if TBA, then make it blank
     if("TBA" in schedDay):
         schd_day = [""]
+    # if there's a comma, then split the days by the comma
     elif("," in schedDay):
         schedDay = schedDay.split(', ')
         for day in schedDay:
             schd_day.append(day[:3].strip().upper())
+    # if there's more than one capital letter, then append the days accordingly
     elif(capCount > 1):
         if("M" in schedDay):
             schd_day.append("MON")
@@ -397,6 +471,7 @@ def createSchedule(scheduleSoup, sct_id, scheduleList, scheduledSet):
         if(len(schd_day) == 0):
             print("error in day")
             print(schedDay)
+    # if there's only one capital letter, then just append the first three letters of the day
     else:
         schd_day.append(schedDay[:3].upper())
         
@@ -410,43 +485,55 @@ def createSchedule(scheduleSoup, sct_id, scheduleList, scheduledSet):
         })
         scheduleList.append(scheduleObj)
     
-
+    # add the id to the set so that it doesn't get scheduled again
     scheduledSet.add(sct_id)
     
-    
-
-
-        
-
+# Parameters: sectionSoupDict, sectionList, instructorListDict, scheduleList, scheduledSet, semester
+# Returns: None
+# Description: reads the sections and creates Section objects and appends them to the list
 def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList, scheduledSet, semester):
+
+    # these variables need to be stored outside of the loop so that they can be brought over in the next iteration
     sectionTitles = False
     sct_num = ""
     sct_title = ""
     sct_id = ""
 
-    
+    # for each key, value pair in the soup dictionary
     for secID, sectionHTML in sectionSoupDict.items():
+        # get the type (section title vs title)
         classType = str(sectionHTML.find('td').get('class'))
+
         if(classType == "[\'section-title\']"):
+            # if it's a section title, inform the next loop that there is a title
             sectionTitles = True
+            # and assign the correct title and course id
             sct_title = sectionHTML.find('td', class_='section-title').text
             sct_num = sectionHTML.get('class')[-1]
+            # and don't go through with the rest of the loop; that info will not be available
             continue
+        # if there was a section title
         elif(sectionTitles and classType == "[\'section\']"):
+            # but the id doesn't match, set the title to be null (which never happens, but it doesn't matter)
             if(sectionHTML.get('data-section-id') != sct_num):
                 sct_title = ""
             sectionTitles = False
+        # if there is still a second line, then that means an additional timing is available, so create that schedule
         elif("secondline" in str(sectionHTML.get('class'))):
             createSchedule(sectionHTML, sct_id, scheduleList, scheduledSet)
             continue
+        # otherwise, reset the title and the sectionTitles boolean
         else:
             sct_title = ""
 
+        # record the section number (and the id for secondline cases)
         sct_num = sectionHTML.get('class')[0]
         sct_id = sectionHTML.find('td', class_='section').text
 
+        # get the type (lecture, lab, quiz, etc.)
         sct_type = sectionHTML.find('td', class_='type').text
         
+        # get the number of seats and the enrollment
         sct_enr = sectionHTML.find('td', class_='registered').text
         sct_enr = sct_enr.split(' of ')
         sct_reg = 0
@@ -467,8 +554,9 @@ def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList,
             sct_reg = 0
             sct_seat = 0
 
-
+        # get the location of the section
         sct_loc = sectionHTML.find('td', class_='location')
+        # split by building and by room (if there is a room)
         sct_build = ""
         sct_room = ""
         if(sct_loc.find('a') is None):
@@ -478,20 +566,25 @@ def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList,
             sct_build = sct_loc.find('a').text
             sct_room = (sct_loc.text).replace(sct_build, "")
 
+        # get the units of the section (if there are any)
         sct_unit = ""
-        if(not (sectionHTML.find('td', class_='units') is None)):
+        if(sectionHTML.find('td', class_='units') is not None):
             sct_unit = sectionHTML.find('td', class_='units').text
             sct_unit = sct_unit.split('.')[0]
             if(sct_unit.isdigit()):
                 sct_unit = int(sct_unit)
             else:
                 sct_unit = ""
-            
+        
+        # get the course id and split it by department and course number
         secID = secID.split(' ')
         dep_id = secID[0]
         crs_num = secID[1]
 
+        # create the schedule for the section
         createSchedule(sectionHTML, sct_id, scheduleList, scheduledSet)
+
+        # create the section object and append it to the list
         sectionObj = Section({
             'DEP_ID': dep_id,
             'CRS_NUM': str(crs_num),
@@ -507,29 +600,37 @@ def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList,
         })
 
         sectionList.append(sectionObj)
+
+
         instructors = sectionHTML.find('td', class_='instructor')
         if instructors is not None and instructors.text != "":
-
+            # if there are instructors, split them by comma (so we can extract the html from memory for a lighter load)
             instructorText = instructors.text
             instructorText = instructorText.split(',')
             for instructor in instructorText:
+                # and organize them by section id
                 instructorListDict[sct_id] = instructor
 
         instructors.extract()
         
         sectionHTML.extract()
 
+# Parameters: instructorListDict, instructorList, teachingList
+# Returns: None
+# Description: reads the instructors and and creates Instructor objects and Teaches objects and appends them to the list
 def readInstructors(instructorListDict, instructorList, teachingList):
-
+    # use the instructor dict to make sure extra duplicate instructors aren't added
     instructorDict = {}
 
     for sct_id, instructor in instructorListDict.items():
+        # get the instructor name
         instr_name = instructor.strip()
-        # instructor lookup table appending
         instr_id = 0
         if instr_name in instructorDict:
+            # if the instructor has an id already, use that id
             instr_id = instructorDict[instr_name]
         else:
+            # otherwise create the new instructor in the lookup list and add it to the dictionary
             instr_id = len(instructorList) + 1
             instrObj = Instructor({
                 'INSTR_ID': instr_id,
@@ -537,7 +638,7 @@ def readInstructors(instructorListDict, instructorList, teachingList):
             })
             instructorList.append(instrObj)
             instructorDict[instr_name] = instr_id
-        # adding id and sectio info to the teaching table
+        # add the instructor with the correct section id to the teaches list
         teachObj = Teaches({
             'INSTR_ID': instr_id,
             'SCT_ID': sct_id
@@ -551,6 +652,8 @@ def readInstructors(instructorListDict, instructorList, teachingList):
 
 def main():
     print("starting!")
+
+    # create the lists to store the data
     schoolList = []
     departmentList = []
     courseList = []
@@ -578,7 +681,10 @@ def main():
     #     requests_log.setLevel(logging.DEBUG)
     #     requests_log.propagate = True
 
-    semester = 20231
+    # can be changed, will use a script or a file to change it
+    semester = 20241
+
+    # read in the semester page, and get the departments and general education requirements
 
     r = urlSession.get('https://classes.usc.edu/term-' + str(semester) + '/')
     soup = BeautifulSoup(r.content, 'lxml')
@@ -586,33 +692,22 @@ def main():
     departments.extract()
     generalEducation = departments.find_all('li', {"data-school":"GE Requirements for Students Beginning College in Fall 2015 or Later"})
 
+    # create the dictionaries for holding the general education requirements and read in the ge requirements
     geafDict = {}
     geghDict = {}
     dCoreSet = set()
     readGeneralEducation(generalEducation, geafDict, geghDict, dCoreSet)
 
+    # get the schools and departments
     departments = departments.find_all('li')
     readSchoolsDepartments(departments, schoolList, departmentList)
 
-
-
-    # depUrlList = []
-    # departmentRequests = {}
-    # print("requesting departments")
-    # for department in departmentList:
-    #     print(department.name)
-    #     departmentRequests[department.id] = urlSession.get('https://classes.usc.edu/term-' + str(semester) + '/classes/' + department.id + '/')
-    # print("finished requesting departments")
-
-
-    # readCourses(departmentRequests, departmentList, courseList, sectionList, instructorList, instructorDict, teachingList, scheduleList, geafDict, geghDict, dCoreSet, semester)
-
-
-
+    # get the urls for the departments (because this is the main intensive part of the program, we will use future and threading to speed it up)
     depUrlList = []
     for department in departmentList:
         depUrlList.append('https://classes.usc.edu/term-' + str(semester) + '/classes/' + department.id + '/')
 
+    # read in every department's courses
     print("future stuff")
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(fetchURL, depUrlList)
@@ -620,29 +715,35 @@ def main():
 
     departmentSoups = {}
 
+    # for every result, add it to the dictionary ordered by department id
     for soup in results:
         depID = soup.find('abbr').text
         departmentSoups[depID] = soup
 
+    # keep the section soup dictionary to store the sections after course processing is over
     sectionSoupDict = {}
+    # then read in the courses
     readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet)
 
     instructorListDict = {}
 
     scheduledSet = set()
 
+    # read the sections (along with the schedules inside)
     readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList, scheduledSet, semester)
 
+    # then read the instructors in
     readInstructors(instructorListDict, instructorList, teachingList)
 
+    # and export the data to csv files (named by semester)
     print("before export")
-    pd.DataFrame([school.to_dict() for school in schoolList]).to_csv('schools.csv', index=False)
+    pd.DataFrame([school.to_dict() for school in schoolList]).to_csv('schools' + str(semester) + '.csv', index=False)
     pd.DataFrame([department.to_dict() for department in departmentList]).to_csv('departments.csv', index=False)
-    pd.DataFrame([course.to_dict() for course in courseList]).to_csv('courses.csv', index=False)
-    pd.DataFrame([section.to_dict() for section in sectionList]).to_csv('sections.csv', index=False)
-    pd.DataFrame([instructor.to_dict() for instructor in instructorList]).to_csv('instructors.csv', index=False)
-    pd.DataFrame([teaching.to_dict() for teaching in teachingList]).to_csv('teaches.csv', index=False)
-    pd.DataFrame([schedule.to_dict() for schedule in scheduleList]).to_csv('schedules.csv', index=False)
+    pd.DataFrame([course.to_dict() for course in courseList]).to_csv('courses' + str(semester) + '.csv', index=False)
+    pd.DataFrame([section.to_dict() for section in sectionList]).to_csv('sections' + str(semester) + '.csv', index=False)
+    pd.DataFrame([instructor.to_dict() for instructor in instructorList]).to_csv('instructors' + str(semester) + '.csv', index=False)
+    pd.DataFrame([teaching.to_dict() for teaching in teachingList]).to_csv('teaches' + str(semester) + '.csv', index=False)
+    pd.DataFrame([schedule.to_dict() for schedule in scheduleList]).to_csv('schedules' + str(semester) + '.csv', index=False)
     print("after export")
 
 if __name__ == '__main__':

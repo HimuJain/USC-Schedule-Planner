@@ -14,8 +14,8 @@
 - [x] see how to handle semester and year for each section
 - [x] Figure out how to add sections to an existing course if this is the case?
 - [x] not all building's rooms are only numbers (see chem 115 from 2023 fall), so fix
-- [ ] see how to handle notes (please!)
-- [ ] **START COMMENTING CODE (IT'S GETTING INCOMPREHENSIBLE)**
+- [x] see how to handle notes (please!) (i'm honestly just going to leave it as html code; it works for now)
+- [x] **START COMMENTING CODE (IT'S GETTING INCOMPREHENSIBLE)**
 - [ ] use the csv files to find the max characters for all the fields for the eer diagram
 - [x] ~~fix regex code to include things like math 437a (not for the webscraper portion actually so whatever~~)
 - [x] Add section formatting
@@ -25,3 +25,12 @@
 - [x] Add GE scraping as well
 - [x] **run a bunch of none checks D:** (which i can kinda do after i run my code through multiple departments :D)
 - [x] **Test every once in a while!** (i'm testing by running my code after i code a million lines! jk but most of my errors are fixed when i go through my code to comment it)
+- [ ] later; think about the logic for crosslisting courses and how to list the actual course you sign up for
+
+## Requirement List
+
+## Account/Export file
+
+## GPA Calculator
+
+## Day Scheduler
