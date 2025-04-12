@@ -2,6 +2,8 @@
 
 A web app I'm creating to help USC students with planning their schedules.
 
+* After going through about two months of my software development class, I'm going to try to incorporate more of the software design cycle in my construction of my app.
+
 Features planned:
 
 * Course list (updated weekly, straight from classes.usc.edu)

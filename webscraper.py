@@ -1,9 +1,8 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-import re
-import cProfile
 import concurrent.futures
+from collections import defaultdict
 
 # the url session is a global variable because i need it to be used in the fetchURL function by default,
 # and i can't pass it as an argument to the fetchURL function because it is called by the ThreadPoolExecutor
@@ -41,6 +40,7 @@ class Department:
 # Course class stores the different courses (CSCI 104, EE 109, etc.) and their details (GE requirements, units)
 class Course:
     def __init__(self, courseData):
+        self.courseID = courseData['CRS_ID']
         self.departmentID = courseData['DEP_ID']
         self.number = courseData['CRS_NUM']
         self.code = courseData['CRS_CODE']
@@ -55,9 +55,12 @@ class Course:
         self.corequisites = courseData['CRS_COREQ']
         self.crosslist = courseData['CRS_CROSS']
         self.notes = courseData['CRS_NOTE']
+        self.startterm = courseData['CRS_STARTTERM']
+        self.endterm = courseData['CRS_ENDTERM']
 
     def to_dict(self):
         return {
+            'CRS_ID': self.courseID,
             'DEP_ID': self.departmentID,
             'CRS_NUM': self.number,
             'CRS_CODE': self.code,
@@ -71,14 +74,27 @@ class Course:
             'CRS_PREREQ': self.prerequisites,
             'CRS_COREQ': self.corequisites,
             'CRS_CROSS': self.crosslist,
-            'CRS_NOTE': self.notes
+            'CRS_NOTE': self.notes,
+            'CRS_STARTTERM': self.startterm,
+            'CRS_ENDTERM': self.endterm
         }
-    
+
+# CourseOfferings class stores the different course offerings (the semester in which the course is offered)
+class CourseOfferings:
+    def __init__(self, courseData):
+        self.courseID = courseData['CRS_ID']
+        self.semester = courseData['SEMESTER']
+
+    def to_dict(self):
+        return {
+            'CRS_ID': self.courseID,
+            'SEMESTER': self.semester,
+        }
+
 # Section class stores the different sections of a course (the lecture sections, the lab, etc. with their IDs)
 class Section:
     def __init__(self, sectionData):
-        self.courseDepID = sectionData['DEP_ID']
-        self.courseNum = sectionData['CRS_NUM']
+        self.courseID = sectionData['CRS_ID']
         self.id = sectionData['SCT_ID']
         self.type = sectionData['SCT_TYPE']
         self.registered = sectionData['SCT_REG']
@@ -91,8 +107,7 @@ class Section:
 
     def to_dict(self):
         return {
-            'DEP_ID': self.courseDepID,
-            'CRS_NUM': self.courseNum,
+            'CRS_ID': self.courseID,
             'SCT_ID': self.id,
             'SCT_TYPE': self.type,
             'SCT_REG': self.registered,
@@ -155,7 +170,7 @@ def fetchURL(url):
 # Parameters: generalEducations, geafDict, geghDict, dCoreSet
 # Returns: None
 # Description: reads the general education requirements and stores them in the appropriate dictionaries to assign them later
-def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
+def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet, semester):
     print("reading general education")
 
     # list of urls to batch process them
@@ -181,7 +196,7 @@ def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
             geTitle = geTitle.replace("Category ", "")
             geCategory = geTitle[0]
         geCategories.append(geCategory)
-        geUrls.append('https://classes.usc.edu/term-20251/classes/' + geCode + '/')
+        geUrls.append('https://classes.usc.edu/term-' + str(semester) + '/classes/' + geCode + '/')
     
     # batch processing the urls
     for i in range(len(geUrls)):
@@ -192,8 +207,8 @@ def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
         r = geResponses[i]
         geCategory = geCategories[i]
         soup = BeautifulSoup(r.content, 'lxml')
-        soup = soup.find('div', id='content-main')
-        soup.extract()
+        # soup = soup.find('div', id='content-main')
+        # soup.extract()
         s = soup.find('div', class_='course-table')
 
         # gets all the classes in that page
@@ -204,16 +219,19 @@ def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet):
             lineStr = str(line.get('id'))
             lineStr = lineStr.replace("<div class=\"course-info expandable\" id=\"", "")
             lineStr = lineStr.replace("\"></div>", "")
-            crs_id = lineStr.replace("-", "")
+            crs_id = lineStr
 
             # classes can have one ge from a-f, one ge from g or h, and can be a dornsife core class
             # so record the relevant ge being parsed right now and put the relevant course in the relevant dictionary
+            print(geCategory + " " + crs_id)
             if(geCategory >= 'A' and geCategory <= 'F'):
                 geafDict[crs_id] = geCategory
             elif(geCategory >= 'G' and geCategory <= 'H'):
                 geghDict[crs_id] = geCategory
             elif(geCategory == 'L'):
                 dCoreSet.add(crs_id)
+
+            line.decompose()
 
 
 # Parameters: departments, schoolList, departmentList
@@ -262,8 +280,8 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
     # first get the specific department soup from the dictionary
     for department in departmentList:
         soup = departmentSoups[department.id]
-        soup = soup.find('div', id='content-main')
-        soup.extract()
+        # soup = soup.find('div', id='content-main')
+        # soup.extract()
         s = soup.find('div', class_='course-table')
         classes = s.find_all('div', class_='course-info expandable')
 
@@ -308,10 +326,25 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                     print("error in units")
             
             # get the notes of the course (straight html for now)
-            crs_note = courseDetails.find('ul', class_='notes')
+            notes = courseDetails.find('ul', class_='notes')
+            notesJSON = defaultdict(list)
+            crs_note = {}
+
+            if notes is not None:
+                for li in notes.find_all('li'):
+                    HTMLclass = li.get("class")
+                    HTMLclass = HTMLclass[0] if HTMLclass is not None else ""
+                    text = li.get_text(strip=True)
+
+                    if not HTMLclass:
+                        notesJSON["other"].append(text)
+                    else:
+                        notesJSON[HTMLclass].append(text)
+
+                crs_note = dict(notesJSON)
 
             # if the course is crosslisted, get the department that offers the course
-            crs_cross = crs_note.find('li', class_='crosslist')
+            crs_cross = courseDetails.find('li', class_='crosslist')
             if (crs_cross is None):
                 crs_cross = ""
             else:
@@ -328,6 +361,7 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
             else:
                 crs_preq = crs_preq.text
                 crs_preq = crs_preq.replace("1 from ", "")
+                crs_preq = crs_preq.replace("Prerequisite: ", "")
 
             
             crs_coreq = courseDetails.find('li', class_='coreq')
@@ -339,7 +373,7 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 
             # get the course id recorded in the dictionary for gen eds
             # and get update the relevant fields if it is a gen ed
-            crs_id = department.id + crs_num
+            crs_id = department.id + "-" + crs_num
             crs_geaf = ""
             crs_gegh = ""
             crs_dcorel = False
@@ -351,6 +385,7 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 crs_dcorel = True
 
             courseObj = Course({
+                'CRS_ID': crs_id,
                 'DEP_ID': department.id,
                 'CRS_NUM': str(crs_num),
                 'CRS_CODE': crs_code,
@@ -364,10 +399,16 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 'CRS_PREREQ': crs_preq,
                 'CRS_COREQ': crs_coreq,
                 'CRS_CROSS': crs_cross,
-                'CRS_NOTE': crs_note
+                'CRS_NOTE': crs_note,
+                'CRS_STARTTERM': "",
+                'CRS_ENDTERM': ""
             })
 
             courseList.append(courseObj)
+
+            # if the course is crosslisted, then don't add it to the soup dictionary, so only the original course is added
+            if(crs_cross != ""):
+                continue
 
             # get the sections from the course soup
             sections = courseDetails.find('table', class_='sections responsive')
@@ -379,11 +420,10 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
             # as one course can have multiple sections, but we need all the different sections
             counter = 0
             for section in sectionHTML:
-                sectionSoupDict[department.id + " " + crs_num + " " + str(counter)] = section
+                sectionSoupDict[crs_id + " " + str(counter)] = section
                 counter += 1
         
             # extract the course details to remove them from the soup
-            line.extract()
 
 # Parameters: scheduleSoup, sct_id, scheduleList, scheduledSet
 # Returns: None
@@ -576,18 +616,16 @@ def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList,
             else:
                 sct_unit = ""
         
-        # get the course id and split it by department and course number
+        # get the course id
         secID = secID.split(' ')
-        dep_id = secID[0]
-        crs_num = secID[1]
+        crs_id = secID[0]
 
         # create the schedule for the section
         createSchedule(sectionHTML, sct_id, scheduleList, scheduledSet)
 
         # create the section object and append it to the list
         sectionObj = Section({
-            'DEP_ID': dep_id,
-            'CRS_NUM': str(crs_num),
+            'CRS_ID': crs_id,
             'SCT_ID': sct_id,
             'SCT_TYPE': sct_type,
             'SCT_REG': sct_reg,
@@ -611,9 +649,9 @@ def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList,
                 # and organize them by section id
                 instructorListDict[sct_id] = instructor
 
-        instructors.extract()
+        instructors.decompose()
         
-        sectionHTML.extract()
+        sectionHTML.decompose()
 
 # Parameters: instructorListDict, instructorList, teachingList
 # Returns: None
@@ -682,7 +720,7 @@ def main():
     #     requests_log.propagate = True
 
     # can be changed, will use a script or a file to change it
-    semester = 20241
+    semester = 20253
 
     # read in the semester page, and get the departments and general education requirements
 
@@ -696,7 +734,7 @@ def main():
     geafDict = {}
     geghDict = {}
     dCoreSet = set()
-    readGeneralEducation(generalEducation, geafDict, geghDict, dCoreSet)
+    readGeneralEducation(generalEducation, geafDict, geghDict, dCoreSet, semester)
 
     # get the schools and departments
     departments = departments.find_all('li')
