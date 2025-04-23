@@ -57,6 +57,8 @@ class Course:
         self.notes = courseData['CRS_NOTE']
         self.startterm = courseData['CRS_STARTTERM']
         self.endterm = courseData['CRS_ENDTERM']
+        # temporaryL
+        self.semester = courseData['SEMESTER']
 
     def to_dict(self):
         return {
@@ -76,7 +78,8 @@ class Course:
             'CRS_CROSS': self.crosslist,
             'CRS_NOTE': self.notes,
             'CRS_STARTTERM': self.startterm,
-            'CRS_ENDTERM': self.endterm
+            'CRS_ENDTERM': self.endterm,
+            'SEMESTER': self.semester
         }
 
 # CourseOfferings class stores the different course offerings (the semester in which the course is offered)
@@ -125,16 +128,16 @@ class Schedule:
         self.sectionID = scheduleData['SCT_ID']
         self.scheduleID = scheduleData['SCH_ID']
         self.day = scheduleData['SCH_DAY']
-        self.start = scheduleData['SCH_STTIME']
-        self.end = scheduleData['SCH_ENTIME']
+        self.start = scheduleData['SCH_STARTTIME']
+        self.end = scheduleData['SCH_ENDTIME']
 
     def to_dict(self):
         return {
             'SCT_ID': self.sectionID,
             'SCH_ID': self.scheduleID,
             'SCH_DAY': self.day,
-            'SCH_STTIME': self.start,
-            'SCH_ENTIME': self.end
+            'SCH_STARTTIME': self.start,
+            'SCH_ENDTIME': self.end
         }
 # Instructor class stores the different instructors and their IDs
 class Instructor:
@@ -153,11 +156,13 @@ class Teaches:
     def __init__(self, teachingData):
         self.instructorID = teachingData['INSTR_ID']
         self.sectionID = teachingData['SCT_ID']
+        self.sectionSem = teachingData['SCT_SEMESTER']
 
     def to_dict(self):
         return {
             'INSTR_ID': self.instructorID,
-            'SCT_ID': self.sectionID
+            'SCT_ID': self.sectionID,
+            'SCT_SEMESTER': self.sectionSem
         }
 
 # Parameters: url
@@ -223,7 +228,7 @@ def readGeneralEducation(generalEducations, geafDict, geghDict, dCoreSet, semest
 
             # classes can have one ge from a-f, one ge from g or h, and can be a dornsife core class
             # so record the relevant ge being parsed right now and put the relevant course in the relevant dictionary
-            print(geCategory + " " + crs_id)
+            # print(geCategory + " " + crs_id)
             if(geCategory >= 'A' and geCategory <= 'F'):
                 geafDict[crs_id] = geCategory
             elif(geCategory >= 'G' and geCategory <= 'H'):
@@ -253,6 +258,8 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
         if(depType == 'school'):
             # if it's a school, create the object and update the school code
             schl_code = str(department.get('data-code'))
+            if(any(school.code == schl_code for school in schoolList)):
+                continue
             schl_name = department.text
             schl_name = schl_name.strip()
             schoolObj = School({
@@ -263,6 +270,8 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
         elif(depType == 'department'):
             # if it's a department, create the object and append it to the list
             dep_id = str(department.get('data-code'))
+            if(any(department.id == dep_id for department in departmentList)):
+                continue
             dep_name = str(department.get('data-title'))
 
             depObj = Department({
@@ -275,11 +284,14 @@ def readSchoolsDepartments(departments, schoolList, departmentList):
 # Parameters: departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet
 # Returns: None
 # Description: reads the courses and creates Course objects and the section Soup objects and appends them to the appropriate lists
-def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet):
+def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet, semester):
     print("reading courses")
     # first get the specific department soup from the dictionary
     for department in departmentList:
-        soup = departmentSoups[department.id]
+        if department.id in departmentSoups:
+            soup = departmentSoups[department.id]
+        else:
+            continue
         # soup = soup.find('div', id='content-main')
         # soup.extract()
         s = soup.find('div', class_='course-table')
@@ -334,7 +346,7 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 for li in notes.find_all('li'):
                     HTMLclass = li.get("class")
                     HTMLclass = HTMLclass[0] if HTMLclass is not None else ""
-                    text = li.get_text(strip=True)
+                    text = li.get_text() # ! use strip?
 
                     if not HTMLclass:
                         notesJSON["other"].append(text)
@@ -379,10 +391,13 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
             crs_dcorel = False
             if crs_id in geafDict:
                 crs_geaf = geafDict[crs_id]
+                # print(crs_id)
             if crs_id in geghDict:
                 crs_gegh = geghDict[crs_id]
+                # print(crs_id)
             if crs_id in dCoreSet:
                 crs_dcorel = True
+                # print(crs_id)
 
             courseObj = Course({
                 'CRS_ID': crs_id,
@@ -401,7 +416,8 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 'CRS_CROSS': crs_cross,
                 'CRS_NOTE': crs_note,
                 'CRS_STARTTERM': "",
-                'CRS_ENDTERM': ""
+                'CRS_ENDTERM': "",
+                'SEMESTER': semester
             })
 
             courseList.append(courseObj)
@@ -449,15 +465,19 @@ def createSchedule(scheduleSoup, sct_id, scheduleList, scheduledSet):
 
     # deal with am and pm accordingly (to turn into 24 hour time)
     if("pm" in meridiem):
-        for time in schedTime:
-            time = time.split(':')
-            if(time[0] != "12"):
-                time[0] = str(int(time[0]) + 12)
-            time = ':'.join(time)
-            if(schd_sttime == ""):
-                schd_sttime = time
-            else:
+        for time in reversed(schedTime):
+            if(schd_entime == ""):
+                time = time.split(':')
+                if(time[0] != "12"):
+                    time[0] = str(int(time[0]) + 12)
+                time = ':'.join(time)
                 schd_entime = time
+            else:
+                time = time.split(':')
+                if(time[0] != "12" and int(time[0]) + 12 <= int(schd_entime.split(':')[0])):
+                    time[0] = str(int(time[0]) + 12)
+                time = ':'.join(time)
+                schd_sttime = time
     elif("am" in meridiem):
         for time in schedTime:
             time = time.split(':')
@@ -520,8 +540,8 @@ def createSchedule(scheduleSoup, sct_id, scheduleList, scheduledSet):
             'SCT_ID': sct_id,
             'SCH_ID': len(scheduleList) + 1,
             'SCH_DAY': day,
-            'SCH_STTIME': schd_sttime,
-            'SCH_ENTIME': schd_entime
+            'SCH_STARTTIME': schd_sttime,
+            'SCH_ENDTIME': schd_entime
         })
         scheduleList.append(scheduleObj)
     
@@ -656,8 +676,9 @@ def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList,
 # Parameters: instructorListDict, instructorList, teachingList
 # Returns: None
 # Description: reads the instructors and and creates Instructor objects and Teaches objects and appends them to the list
-def readInstructors(instructorListDict, instructorList, teachingList):
+def readInstructors(instructorListDict, instructorList, teachingList, semester):
     # use the instructor dict to make sure extra duplicate instructors aren't added
+    # ! move to outside the function
     instructorDict = {}
 
     for sct_id, instructor in instructorListDict.items():
@@ -679,7 +700,8 @@ def readInstructors(instructorListDict, instructorList, teachingList):
         # add the instructor with the correct section id to the teaches list
         teachObj = Teaches({
             'INSTR_ID': instr_id,
-            'SCT_ID': sct_id
+            'SCT_ID': sct_id,
+            'SCT_SEMESTER': semester
         })
         teachingList.append(teachObj)
 
@@ -720,68 +742,78 @@ def main():
     #     requests_log.propagate = True
 
     # can be changed, will use a script or a file to change it
-    semester = 20253
+    for i in range(9):
+        a = i//3
+        b = (i%3) + 1
+        semester = 20230 + (a*10) + b
 
-    # read in the semester page, and get the departments and general education requirements
+        # read in the semester page, and get the departments and general education requirements
+        print("starting semester " + str(semester))
+        r = urlSession.get('https://classes.usc.edu/term-' + str(semester) + '/')
+        soup = BeautifulSoup(r.content, 'lxml')
+        departments = soup.find('ul', id='sortable-classes')
+        departments.extract()
+        generalEducation = departments.find_all('li', {"data-school":"GE Requirements for Students Beginning College in Fall 2015 or Later"})
 
-    r = urlSession.get('https://classes.usc.edu/term-' + str(semester) + '/')
-    soup = BeautifulSoup(r.content, 'lxml')
-    departments = soup.find('ul', id='sortable-classes')
-    departments.extract()
-    generalEducation = departments.find_all('li', {"data-school":"GE Requirements for Students Beginning College in Fall 2015 or Later"})
+        # create the dictionaries for holding the general education requirements and read in the ge requirements
+        geafDict = {}
+        geghDict = {}
+        dCoreSet = set()
+        readGeneralEducation(generalEducation, geafDict, geghDict, dCoreSet, semester)
 
-    # create the dictionaries for holding the general education requirements and read in the ge requirements
-    geafDict = {}
-    geghDict = {}
-    dCoreSet = set()
-    readGeneralEducation(generalEducation, geafDict, geghDict, dCoreSet, semester)
+        # get the schools and departments
+        departments = departments.find_all('li')
+        readSchoolsDepartments(departments, schoolList, departmentList)
 
-    # get the schools and departments
-    departments = departments.find_all('li')
-    readSchoolsDepartments(departments, schoolList, departmentList)
+        # get the urls for the departments (because this is the main intensive part of the program, we will use future and threading to speed it up)
+        depUrlList = []
+        for department in departmentList:
+            depUrlList.append('https://classes.usc.edu/term-' + str(semester) + '/classes/' + department.id + '/')
 
-    # get the urls for the departments (because this is the main intensive part of the program, we will use future and threading to speed it up)
-    depUrlList = []
-    for department in departmentList:
-        depUrlList.append('https://classes.usc.edu/term-' + str(semester) + '/classes/' + department.id + '/')
+        # read in every department's courses
+        print("future stuff")
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            results = executor.map(fetchURL, depUrlList)
+        print("after future stuff")
 
-    # read in every department's courses
-    print("future stuff")
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = executor.map(fetchURL, depUrlList)
-    print("after future stuff")
+        departmentSoups = {}
 
-    departmentSoups = {}
+        # for every result, add it to the dictionary ordered by department id
+        for soup in results:
+            depID = soup.find('abbr').text
+            departmentSoups[depID] = soup
 
-    # for every result, add it to the dictionary ordered by department id
-    for soup in results:
-        depID = soup.find('abbr').text
-        departmentSoups[depID] = soup
+        # keep the section soup dictionary to store the sections after course processing is over
+        sectionSoupDict = {}
+        # then read in the courses
+        readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet, semester)
 
-    # keep the section soup dictionary to store the sections after course processing is over
-    sectionSoupDict = {}
-    # then read in the courses
-    readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, geafDict, geghDict, dCoreSet)
+        instructorListDict = {} # ! move to the top, assigns ids to instructors if they exist already
 
-    instructorListDict = {}
+        scheduledSet = set()
 
-    scheduledSet = set()
+        # read the sections (along with the schedules inside)
+        readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList, scheduledSet, semester)
 
-    # read the sections (along with the schedules inside)
-    readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList, scheduledSet, semester)
-
-    # then read the instructors in
-    readInstructors(instructorListDict, instructorList, teachingList)
+        # then read the instructors in
+        readInstructors(instructorListDict, instructorList, teachingList, semester)
 
     # and export the data to csv files (named by semester)
     print("before export")
-    pd.DataFrame([school.to_dict() for school in schoolList]).to_csv('schools' + str(semester) + '.csv', index=False)
+    # pd.DataFrame([school.to_dict() for school in schoolList]).to_csv('schools' + str(semester) + '.csv', index=False)
+    # pd.DataFrame([department.to_dict() for department in departmentList]).to_csv('departments' + str(semester) + '.csv', index=False)
+    # pd.DataFrame([course.to_dict() for course in courseList]).to_csv('courses' + str(semester) + '.csv', index=False)
+    # pd.DataFrame([section.to_dict() for section in sectionList]).to_csv('sections' + str(semester) + '.csv', index=False)
+    # pd.DataFrame([instructor.to_dict() for instructor in instructorList]).to_csv('instructors' + str(semester) + '.csv', index=False)
+    # pd.DataFrame([teaching.to_dict() for teaching in teachingList]).to_csv('teaches' + str(semester) + '.csv', index=False)
+    # pd.DataFrame([schedule.to_dict() for schedule in scheduleList]).to_csv('schedules' + str(semester) + '.csv', index=False)
+    pd.DataFrame([school.to_dict() for school in schoolList]).to_csv('schools.csv', index=False)
     pd.DataFrame([department.to_dict() for department in departmentList]).to_csv('departments.csv', index=False)
-    pd.DataFrame([course.to_dict() for course in courseList]).to_csv('courses' + str(semester) + '.csv', index=False)
-    pd.DataFrame([section.to_dict() for section in sectionList]).to_csv('sections' + str(semester) + '.csv', index=False)
-    pd.DataFrame([instructor.to_dict() for instructor in instructorList]).to_csv('instructors' + str(semester) + '.csv', index=False)
-    pd.DataFrame([teaching.to_dict() for teaching in teachingList]).to_csv('teaches' + str(semester) + '.csv', index=False)
-    pd.DataFrame([schedule.to_dict() for schedule in scheduleList]).to_csv('schedules' + str(semester) + '.csv', index=False)
+    pd.DataFrame([course.to_dict() for course in courseList]).to_csv('courses.csv', index=False)
+    pd.DataFrame([section.to_dict() for section in sectionList]).to_csv('sections.csv', index=False)
+    pd.DataFrame([instructor.to_dict() for instructor in instructorList]).to_csv('instructors.csv', index=False)
+    pd.DataFrame([teaching.to_dict() for teaching in teachingList]).to_csv('teaches.csv', index=False)
+    pd.DataFrame([schedule.to_dict() for schedule in scheduleList]).to_csv('schedules.csv', index=False)
     print("after export")
 
 if __name__ == '__main__':

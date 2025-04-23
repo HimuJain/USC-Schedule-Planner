@@ -7,12 +7,12 @@ DRNS,ARAB,Arabic
 DRNS,AHIS,Art History
 DRNS,ASTR,Astronomy
 DRNS,BISC,Biological Sciences
-DRNS,CGSC,Cognitive Science
 DRNS,CHEM,Chemistry
 DRNS,CLAS,Classics
 DRNS,COLT,Comparative Literature
 DRNS,CORE,Thematic Option
 DRNS,CSLC,Comparative Studies in Literature and Culture
+DRNS,SCDC,Dornsife in DC Program
 DRNS,EALC,East Asian Languages and Cultures
 DRNS,EASC,East Asian Studies
 DRNS,ECON,Economics
@@ -20,6 +20,7 @@ DRNS,ENGL,English
 DRNS,ENST,Environmental Studies Program
 DRNS,GSEC,Global Security Studies
 DRNS,FREN,French
+DRNS,FSEM,Freshman Seminars
 DRNS,GEOL,Geological Sciences
 DRNS,GERM,German Studies
 DRNS,SWMS,Gender and Sexuality Studies
@@ -47,16 +48,15 @@ DRNS,POIR,Political Science and International Relations
 DRNS,PORT,Portuguese
 DRNS,POSC,Political Science
 DRNS,PSYC,Psychology
-DRNS,QBIO,Quantitative and Computational Biology
+DRNS,QBIO,Quantitative Biology
 DRNS,REL,Religion
 DRNS,RNR,Registrar's Office
 DRNS,RUSS,Russian
 DRNS,SLL,Slavic Languages and Literatures
-DRNS,SMGT,Sustainability Management
 DRNS,SOCI,Sociology
 DRNS,SPAN,Spanish
 DRNS,SSCI,Spatial Sciences
-DRNS,VISS,Visual Studies
+DRNS,USC,University of Southern California
 DRNS,WRIT,Writing
 ACTN,ACCT,Accounting
 ARCH,ARCH,Architecture
@@ -69,14 +69,13 @@ BUS,BUCO,Business Communication
 BUS,DSO,Data Sciences and Operations
 BUS,FBE,Finance and Business Economics
 BUS,GSBA,Graduate School of Business Administration
+BUS,LIM,Library and Information Management
 BUS,MKT,Marketing
 BUS,MOR,Management and Organization
-BUS,RISK,Risk Management
 BVC,CJ,Criminal Justice
 BVC,EM,Emergency Management
 BVC,HRM,Human Resource Management
 BVC,HT,Hospitality and Tourism
-BVC,LIM,Library and Information Management
 BVC,PJMT,Project Management
 CNMA,CMPP,Motion Picture Producing
 CNMA,CNTV,Cinematic Arts
@@ -90,21 +89,30 @@ CNMA,CTXA,Expanded Animation
 ANSC,ASCJ,Communication and Journalism
 ANSC,CMGT,Communication Management
 ANSC,COMM,Communication
+ANSC,DMM,Digital Media Management
 ANSC,DSM,Digital Social Media
 ANSC,JOUR,Journalism
 ANSC,PR,Public Relations
 ANSC,PUBD,Public Diplomacy
 DNCR,DANC,Dance
+DNTR,ADNT,Advanced Dental Education Conjoint Program
 DNTR,DENT,Dentistry
 DNTR,COH,Community Oral Health
 DNTR,CBY,Craniofacial Biology
+DNTR,DPBL,Dental Problem Based Learning
 DNTR,GDEN,Geriatric Dentistry
+DNTR,GPR,General Practice Residency
 DNTR,OFP,Orofacial Pain
 DNTR,OFPM,Orofacial Pain and Oral Medicine
 DNTR,OPR,Oral Pathology and Radiology
+DNTR,OPER,Operative Dentistry
+DNTR,PEDO,Pediatric Dentistry
+DNTR,PERI,Periodontics
 DRAM,THTE,Dramatic Arts Expanded
 DRAM,THTR,Dramatic Arts
+EDCR,EDCO,Education Counseling
 EDCR,EDHP,Higher and Postsecondary Education
+EDCR,EDPT,Educational Psychology and Technology
 EDCR,EDUC,Education
 EDCR,EDUE,Education Expanded
 ENGV,AME,Aerospace and Mechanical Engineering
@@ -115,18 +123,16 @@ ENGV,CE,Civil Engineering
 ENGV,CSCI,Computer Science
 ENGV,DSCI,Data Science
 ENGV,EE,Electrical and Computer Engineering
-ENGV,EIS,Engineering in Society
 ENGV,ENE,Environmental Engineering
 ENGV,ENGR,Engineering
 ENGV,ISE,Industrial and Systems Engineering
+ENGV,ITP,Information Technology Program
 ENGV,MASC,Materials Science
 ENGV,PTE,Petroleum Engineering
 ENGV,SAE,Systems Architecting and Engineering
-ENGV,TAC,Technology and Applied Computing
 FINE,ART,Art
 FINE,CRIT,Critical Studies
 FINE,DES,Design
-FINE,FDN,Fashion Design
 FINE,GESM,General Education Seminar
 GERD,GERO,Gerontology
 GRSC,GRSC,Graduate Studies
@@ -142,19 +148,20 @@ MEDK,HP,Health Promotion and Disease Prevention Studies
 MEDK,INTD,Interdepartmental
 MEDK,MBPH,Medical Biophysics
 MEDK,MDED,Medical Education
+MEDK,MED,Medicine
 MEDK,MEDB,Medical Biology
 MEDK,MEDS,Medical Sciences
 MEDK,MICB,Molecular Microbiology and Immunology
-MEDK,NEUM,Neuromedicine
+MEDK,MPHY,Medical Physiology
 MEDK,NIIN,Neuroimaging and Informatics
 MEDK,OHNS,Otolaryngology - Head and Neck Surgery
 MEDK,PAIN,Pain Medicine
 MEDK,PATH,Pathology
 MEDK,PBHS,Psychiatry and Behavioral Sciences
+MEDK,PHBI,Physiology and Biophysics
 MEDK,PM,Population and Public Health Sciences
 MEDK,PCPA,Primary Care Physician Assistant
 MEDK,SCRM,Stem Cell Biology and Regenerative Medicine
-MEDK,SGY,Surgery
 MEDK,TRGN,Translational Genomics
 MUS,ARTL,Arts Leadership
 MUS,MTEC,Music Technology
@@ -176,12 +183,17 @@ MUS,MPVA,Performance (Vocal Arts)
 MUS,MPWP,Performance (Winds and Percussion)
 MUS,MUSC,Music
 MUS,SCOR,Screen Scoring
+NURS,NURS,Nursing
 OCST,OT,Occupational Science and Occupational Therapy
+PHAR,BPMK,Biopharmaceutical Marketing
 PHAR,BPSI,Biopharmaceutical Sciences
 PHAR,CXPT,Clinical and Experimental Therapeutics
+PHAR,HCDA,Healthcare Decision Analysis
+PHAR,MPTX,Molecular Pharmacology and Toxicology
 PHAR,PHRD,Pharmacy
 PHAR,PMEP,Pharmaceutical Economics and Policy
 PHAR,PSCI,Pharmaceutical Sciences
+PHAR,RSCI,Regulatory Science
 PHAR,RXRS,Pharmaceutical and Regulatory Science
 PHAR,BKN,Biokinesiology
 PHAR,PT,Physical Therapy
@@ -196,4 +208,26 @@ PPDP,PLUS,Urban and Regional Planning
 PPDP,RED,Real Estate Development
 SWDP,SWKC,On Campus and Hybrid courses
 SWDP,SWKO,Virtual Academic Center
+DRNS,VISS,Visual Studies
+DNTR,ANAT,Anatomy
+DRNS,CGSC,Cognitive Science
+ANSC,PRSM,"Public Relations Innovation, Strategy and Management"
+DNTR,DHIS,Dentistry History
+DNTR,DPHR,DPHR
+ENGV,EIS,Engineering in Society
+MEDK,NEUM,Neuromedicine
 SWDP,PDF,Postdoctoral Fellows
+DRNS,SMGT,Sustainability Management
+FINE,FDN,Fashion Design
+DNTR,AMED,Anesthesia And Medicine
+DNTR,BITE,Biomedical Implants and Tissue Engineering
+DNTR,BMDD,Biomaterials and Digital Dentistry
+DNTR,ENDO,Endodontics
+DNTR,ORTH,Orthodontics
+DNTR,PTHL,PTHL
+DNTR,REST,Restorative Dentistry
+DNTR,SURG,Oral Surgery
+BUS,RISK,Risk Management
+DNTR,DMAT,Dental Materials
+MEDK,SGY,Surgery
+ENGV,TAC,Technology and Applied Computing
