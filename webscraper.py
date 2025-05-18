@@ -11,36 +11,53 @@ urlSession = requests.Session()
 
 # class definitions based on the sql database schema
 
+# Semester class stores the different semesters 
+class Semester:
+    def __init__(self, semesterData):
+        self.semester = semesterData['SEM_ID']
+        self.name = semesterData['SEM_NAME']
+    
+    def to_dict(self):
+        return {
+            'SEM_ID': self.semester,
+            'SEM_NAME': self.name
+        }
+
 # School class stores the different schools (school of engineering, school of business, etc.)
 class School:
     def __init__(self, schoolData):
         self.code = schoolData['SCHL_CODE']
+        self.semester = schoolData['SEM_ID']
         self.name = schoolData['SCHL_NAME']
 
     def to_dict(self):
         return {
             'SCHL_CODE': self.code,
+            'SEM_ID': self.semester,
             'SCHL_NAME': self.name
         }
     
 # Department class stores the different course departments (computer science, electrical engineering, etc.)
 class Department:
     def __init__(self, departmentData):
-        self.schoolCode = departmentData['SCHL_CODE']
         self.id = departmentData['DEP_ID']
+        self.schoolCode = departmentData['SCHL_CODE']
+        self.semester = departmentData['SEM_ID']
         self.name = departmentData['DEP_NAME']
 
     def to_dict(self):
         return {
-            'SCHL_CODE': self.schoolCode,
             'DEP_ID': self.id,
+            'SCHL_CODE': self.schoolCode,
+            'SEM_ID': self.semester,
             'DEP_NAME': self.name
         }
 
 # Course class stores the different courses (CSCI 104, EE 109, etc.) and their details (GE requirements, units)
 class Course:
     def __init__(self, courseData):
-        self.courseID = courseData['CRS_ID']
+        self.courseID = courseData['CRS_UID']
+        self.semester = courseData['SEM_ID']
         self.departmentID = courseData['DEP_ID']
         self.number = courseData['CRS_NUM']
         self.code = courseData['CRS_CODE']
@@ -55,14 +72,11 @@ class Course:
         self.corequisites = courseData['CRS_COREQ']
         self.crosslist = courseData['CRS_CROSS']
         self.notes = courseData['CRS_NOTE']
-        self.startterm = courseData['CRS_STARTTERM']
-        self.endterm = courseData['CRS_ENDTERM']
-        # temporaryL
-        self.semester = courseData['SEMESTER']
 
     def to_dict(self):
         return {
-            'CRS_ID': self.courseID,
+            'CRS_UID': self.courseID,
+            'SEM_ID': self.semester,
             'DEP_ID': self.departmentID,
             'CRS_NUM': self.number,
             'CRS_CODE': self.code,
@@ -76,29 +90,16 @@ class Course:
             'CRS_PREREQ': self.prerequisites,
             'CRS_COREQ': self.corequisites,
             'CRS_CROSS': self.crosslist,
-            'CRS_NOTE': self.notes,
-            'CRS_STARTTERM': self.startterm,
-            'CRS_ENDTERM': self.endterm,
-            'SEMESTER': self.semester
+            'CRS_NOTE': self.notes
         }
 
-# CourseOfferings class stores the different course offerings (the semester in which the course is offered)
-class CourseOfferings:
-    def __init__(self, courseData):
-        self.courseID = courseData['CRS_ID']
-        self.semester = courseData['SEMESTER']
-
-    def to_dict(self):
-        return {
-            'CRS_ID': self.courseID,
-            'SEMESTER': self.semester,
-        }
 
 # Section class stores the different sections of a course (the lecture sections, the lab, etc. with their IDs)
 class Section:
     def __init__(self, sectionData):
-        self.courseID = sectionData['CRS_ID']
         self.id = sectionData['SCT_ID']
+        self.courseID = sectionData['CRS_UID']
+        self.semester = sectionData['SEM_ID']
         self.type = sectionData['SCT_TYPE']
         self.registered = sectionData['SCT_REG']
         self.seats = sectionData['SCT_SEATS']
@@ -106,20 +107,19 @@ class Section:
         self.room = sectionData['SCT_ROOM']
         self.title = sectionData['SCT_TITLE']
         self.units = sectionData['SCT_UNITS']
-        self.semester = sectionData['SCT_SEMESTER']
 
     def to_dict(self):
         return {
-            'CRS_ID': self.courseID,
             'SCT_ID': self.id,
+            'CRS_UID': self.courseID,
+            'SEM_ID': self.semester,
             'SCT_TYPE': self.type,
             'SCT_REG': self.registered,
             'SCT_SEATS': self.seats,
             'SCT_BUILD': self.building,
             'SCT_ROOM': self.room,
             'SCT_TITLE': self.title,
-            'SCT_UNITS': self.units,
-            'SCT_SEMESTER': self.semester
+            'SCT_UNITS': self.units
         }
 
 # Schedule class stores all the different schedules of a section (one row for each different day and time)
@@ -156,13 +156,13 @@ class Teaches:
     def __init__(self, teachingData):
         self.instructorID = teachingData['INSTR_ID']
         self.sectionID = teachingData['SCT_ID']
-        self.sectionSem = teachingData['SCT_SEMESTER']
+        self.semester = teachingData['SEM_ID']
 
     def to_dict(self):
         return {
             'INSTR_ID': self.instructorID,
             'SCT_ID': self.sectionID,
-            'SCT_SEMESTER': self.sectionSem
+            'SEM_ID': self.semester
         }
 
 # Parameters: url
@@ -400,7 +400,8 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 # print(crs_id)
 
             courseObj = Course({
-                'CRS_ID': crs_id,
+                'CRS_UID': '0',
+                'SEM_ID': semester,
                 'DEP_ID': department.id,
                 'CRS_NUM': str(crs_num),
                 'CRS_CODE': crs_code,
@@ -414,10 +415,7 @@ def readCourses(departmentSoups, departmentList, courseList, sectionSoupDict, ge
                 'CRS_PREREQ': crs_preq,
                 'CRS_COREQ': crs_coreq,
                 'CRS_CROSS': crs_cross,
-                'CRS_NOTE': crs_note,
-                'CRS_STARTTERM': "",
-                'CRS_ENDTERM': "",
-                'SEMESTER': semester
+                'CRS_NOTE': crs_note
             })
 
             courseList.append(courseObj)
@@ -638,23 +636,24 @@ def readSections(sectionSoupDict, sectionList, instructorListDict, scheduleList,
         
         # get the course id
         secID = secID.split(' ')
-        crs_id = secID[0]
+        dep_id = secID[0].split('-')[0]
+        crs_num = secID[0].split('-')[1]
 
         # create the schedule for the section
         createSchedule(sectionHTML, sct_id, scheduleList, scheduledSet)
 
         # create the section object and append it to the list
         sectionObj = Section({
-            'CRS_ID': crs_id,
             'SCT_ID': sct_id,
+            'CRS_UID': '0',
+            'SEM_ID': semester,
             'SCT_TYPE': sct_type,
             'SCT_REG': sct_reg,
             'SCT_SEATS': sct_seat,
             'SCT_BUILD': sct_build,
             'SCT_ROOM': str(sct_room),
             'SCT_TITLE': sct_title,
-            'SCT_UNITS': sct_unit,
-            'SCT_SEMESTER': semester
+            'SCT_UNITS': sct_unit
         })
 
         sectionList.append(sectionObj)
@@ -701,7 +700,7 @@ def readInstructors(instructorListDict, instructorList, teachingList, semester):
         teachObj = Teaches({
             'INSTR_ID': instr_id,
             'SCT_ID': sct_id,
-            'SCT_SEMESTER': semester
+            'SEM_ID': semester
         })
         teachingList.append(teachObj)
 
@@ -746,6 +745,19 @@ def main():
         a = i//3
         b = (i%3) + 1
         semester = 20230 + (a*10) + b
+        sem_str = ""
+        if(b == 1):
+            sem_str = "Spring"
+        elif(b == 2):
+            sem_str = "Summer"
+        elif(b == 3):
+            sem_str = "Fall"
+        
+        sem_str += str(semester/10)
+        semObj = Semester({
+            'SEM_ID': semester,
+            'SEM_NAME': sem_str
+        })
 
         # read in the semester page, and get the departments and general education requirements
         print("starting semester " + str(semester))
@@ -814,6 +826,7 @@ def main():
     pd.DataFrame([instructor.to_dict() for instructor in instructorList]).to_csv('instructors.csv', index=False)
     pd.DataFrame([teaching.to_dict() for teaching in teachingList]).to_csv('teaches.csv', index=False)
     pd.DataFrame([schedule.to_dict() for schedule in scheduleList]).to_csv('schedules.csv', index=False)
+    pd.DataFrame([sem.to_dict() for sem in semObj]).to_csv('semesters.csv', index=False)
     print("after export")
 
 if __name__ == '__main__':
